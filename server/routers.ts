@@ -143,9 +143,25 @@ export const appRouter = router({
           // Net BTC from trades
           const btcGrowth = btcReceivedFromTrades - btcSpentOnTrades;
           
-          // Use total BTC deposits as the baseline for percentage calculation
-          // This represents the BTC investment before any trading activity
-          const btcHoldingsAtTradeTime = btcDeposits;
+          // Calculate BTC holdings at time of first BTC-pair trade
+          // This accounts for deposits, BTC/USD buys, and BTC/USD sells before trading
+          let btcHoldingsAtTradeTime = btcDeposits; // Default to deposits
+          
+          if (btcPairTrades.length > 0) {
+            // Find timestamp of first BTC-pair trade
+            const firstBtcPairTrade = btcPairTrades.sort((a, b) => a.timestamp - b.timestamp)[0];
+            const firstTradeTimestamp = firstBtcPairTrade.timestamp;
+            
+            // Sum all BTC transactions (deposits + buys - sells) BEFORE first BTC-pair trade
+            const btcBeforeTrade = btcTransactions
+              .filter(tx => tx.timestamp < firstTradeTimestamp)
+              .reduce((sum, tx) => sum + tx.amount, 0);
+            
+            // Use the calculated balance if we have transaction history
+            if (btcBeforeTrade > 0) {
+              btcHoldingsAtTradeTime = btcBeforeTrade;
+            }
+          }
           
           const btcPrice = prices.btc || 0;
           
