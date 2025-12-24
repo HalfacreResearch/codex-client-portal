@@ -157,8 +157,8 @@ export const appRouter = router({
               .filter(tx => tx.timestamp < firstTradeTimestamp)
               .reduce((sum, tx) => sum + tx.amount, 0);
             
-            // BTC holdings = net BTC from all transactions before first trade (includes deposits)
-            btcHoldingsAtTradeTime = btcBeforeTrade;
+            // BTC holdings = deposits + net BTC from prior transactions
+            btcHoldingsAtTradeTime = btcDeposits + btcBeforeTrade;
           }
           
           const btcPrice = prices.btc || 0;
