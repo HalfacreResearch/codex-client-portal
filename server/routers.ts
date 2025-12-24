@@ -118,48 +118,34 @@ export const appRouter = router({
               }));
           }
           
-          // BTC-pair trades have prices < 0.01 (BTC-denominated prices)
-          // Negative amount = spent BTC to buy crypto
-          // Positive amount = received BTC from selling crypto
-          const btcPairTrades = btcTransactions.filter(tx => {
+          // BTC-pair trades are crypto/BTC pairs (like SOL/BTC, LINK/BTC)
+          // They have BTC-denominated prices (0.0001 to 0.01) and currency is NOT 'btc'
+          // This excludes BTC/USD trades which also have currency='btc'
+          const btcPairTrades = allTransactions.filter(tx => {
             const price = tx.price || 0;
-            return price > 0 && price < 0.01;
+            const currency = (tx.currency || "").toLowerCase();
+            // Must have BTC-denominated price AND not be a BTC/USD trade
+            return price > 0 && price < 0.01 && currency !== "btc" && currency !== "usd";
           });
                   
-          // Calculate BTC spent on trades (negative amounts)
+          // For BTC-pair trades, amount is in the crypto currency (SOL, LINK, etc.)
+          // We need to multiply by price to get BTC value
+          // Buy action with negative amount = spending BTC to buy crypto
+          // Sell action with negative amount = selling crypto for BTC (receiving BTC)
           const btcSpentOnTrades = btcPairTrades
-            .filter(tx => tx.amount < 0)
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            .filter(tx => tx.action === "Buy")
+            .reduce((sum, tx) => sum + Math.abs(tx.amount) * (tx.price || 0), 0);
           
-          // Calculate BTC received from trades (positive amounts)
           const btcReceivedFromTrades = btcPairTrades
-            .filter(tx => tx.amount > 0)
-            .reduce((sum, tx) => sum + tx.amount, 0);
+            .filter(tx => tx.action === "Sell")
+            .reduce((sum, tx) => sum + Math.abs(tx.amount) * (tx.price || 0), 0);
           
           // Net BTC from trades
           const btcGrowth = btcReceivedFromTrades - btcSpentOnTrades;
           
-          // Calculate BTC holdings at time of first BTC-pair trade
-          // by reconstructing balance from transaction history
-          let btcHoldingsAtTradeTime = btcDeposits; // Default to deposits
-          
-          if (btcPairTrades.length > 0) {
-            // Sort all BTC transactions by timestamp
-            const sortedBtcTxs = btcTransactions.sort((a, b) => a.timestamp - b.timestamp);
-            
-            // Find timestamp of first BTC-pair trade
-            const firstBtcPairTrade = btcPairTrades.sort((a, b) => a.timestamp - b.timestamp)[0];
-            const firstTradeTimestamp = firstBtcPairTrade.timestamp;
-            
-            // Sum all BTC transactions that happened BEFORE the first BTC-pair trade
-            // This includes deposits (already counted) and any BTC/USD trades
-            const btcBeforeTrade = sortedBtcTxs
-              .filter(tx => tx.timestamp < firstTradeTimestamp)
-              .reduce((sum, tx) => sum + tx.amount, 0);
-            
-            // BTC holdings = net BTC from all transactions before first trade (includes deposits)
-            btcHoldingsAtTradeTime = btcBeforeTrade;
-          }
+          // Use total BTC deposits as the baseline for percentage calculation
+          // This represents the BTC investment before any trading activity
+          const btcHoldingsAtTradeTime = btcDeposits;
           
           const btcPrice = prices.btc || 0;
           
