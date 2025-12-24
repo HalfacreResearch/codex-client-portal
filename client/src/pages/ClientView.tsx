@@ -1,0 +1,305 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  DollarSign,
+  Bitcoin,
+  ArrowLeft,
+  LogOut,
+} from "lucide-react";
+import { useState } from "react";
+import { useLocation, useParams } from "wouter";
+import { useEffect } from "react";
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatNumber(value: number, decimals: number = 4): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
+function formatPercent(value: number): string {
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}
+
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function ClientView() {
+  const { user, loading: authLoading, logout } = useAuth();
+  const [, setLocation] = useLocation();
+  const params = useParams<{ id: string }>();
+  const clientId = parseInt(params.id || "0", 10);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Redirect non-admins
+  useEffect(() => {
+    if (!authLoading && (!user || user.role !== "admin")) {
+      setLocation("/dashboard");
+    }
+  }, [user, authLoading, setLocation]);
+
+  const {
+    data: portfolio,
+    isLoading,
+    refetch,
+  } = trpc.admin.getClientPortfolio.useQuery(
+    { userId: clientId },
+    { enabled: !!user && user.role === "admin" && clientId > 0 }
+  );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation("/");
+  };
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="border-b border-border bg-card/50 h-16">
+          <div className="container flex items-center justify-between h-full">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-40" />
+          </div>
+        </header>
+        <main className="container py-8">
+          <Skeleton className="h-8 w-48 mb-8" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-64" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== "admin") {
+    return null;
+  }
+
+  const isPositiveGrowth = (portfolio?.dollarGrowth || 0) >= 0;
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container flex items-center justify-between h-16">
+          <div className="flex items-center gap-3">
+            <img src="/logo.webp" alt="BTC Treasury Codex" className="w-10 h-10 rounded-lg object-cover" />
+            <div>
+              <span className="text-xl font-bold text-foreground">BTC Treasury Codex</span>
+              <span className="ml-2 text-sm text-muted-foreground">Admin View</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">{user.name || user.email}</span>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-8">
+        {/* Back button and client info */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={() => setLocation("/admin")}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Admin
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                {portfolio?.client?.name || "Client"}'s Portfolio
+              </h1>
+              <p className="text-muted-foreground">{portfolio?.client?.email}</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="border-border"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
+
+        {!portfolio?.hasCredentials || portfolio.error ? (
+          <Card className="bg-card border-border">
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <Wallet className="h-16 w-16 text-muted-foreground mb-4" />
+              <h2 className="text-xl font-semibold text-foreground mb-2">No Portfolio Data</h2>
+              <p className="text-muted-foreground text-center max-w-md">
+                {portfolio?.error || "This client doesn't have an API key configured yet."}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Top Row: Portfolio Overview & USD Growth */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Portfolio Overview Card */}
+              <Card className="bg-card border-border">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-foreground flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-primary" />
+                    Portfolio Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-6">
+                    <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
+                    <p className="text-4xl font-bold text-foreground">{formatCurrency(portfolio.totalValue)}</p>
+                  </div>
+                  <div className="space-y-3">
+                    {portfolio.balances.map((balance: any) => (
+                      <div key={balance.currency} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                            <span className="text-xs font-bold text-foreground uppercase">{balance.currency.slice(0, 3)}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground uppercase">{balance.currency}</p>
+                            <p className="text-sm text-muted-foreground">{formatNumber(balance.total)} {balance.currency.toUpperCase()}</p>
+                          </div>
+                        </div>
+                        <p className="font-semibold text-foreground">{formatCurrency(balance.usdValue)}</p>
+                      </div>
+                    ))}
+                    {portfolio.balances.length === 0 && (
+                      <p className="text-muted-foreground text-center py-4">No holdings found</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* USD Growth Metrics Card */}
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle className="text-foreground flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-primary" />
+                    USD Growth Metrics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total USD Deposited</p>
+                      <p className="text-2xl font-bold text-foreground">{formatCurrency(portfolio.totalDeposited)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Portfolio Value</p>
+                      <p className="text-2xl font-bold text-foreground">{formatCurrency(portfolio.totalValue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Dollar Growth</p>
+                      <p className={`text-2xl font-bold flex items-center gap-2 ${isPositiveGrowth ? "text-green-500" : "text-red-500"}`}>
+                        {isPositiveGrowth ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                        {formatCurrency(Math.abs(portfolio.dollarGrowth))}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Percentage Growth</p>
+                      <p className={`text-2xl font-bold ${isPositiveGrowth ? "text-green-500" : "text-red-500"}`}>
+                        {formatPercent(portfolio.percentGrowth)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* BTC Performance Card (conditional) */}
+            {portfolio.btcMetrics && (
+              <Card className="bg-card border-border mb-6">
+                <CardHeader>
+                  <CardTitle className="text-foreground flex items-center gap-2">
+                    <Bitcoin className="h-5 w-5 text-primary" />
+                    BTC Performance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total BTC Purchased</p>
+                      <p className="text-2xl font-bold text-foreground">{formatNumber(portfolio.btcMetrics.totalPurchased, 8)} BTC</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">BTC Currently Held</p>
+                      <p className="text-2xl font-bold text-foreground">{formatNumber(portfolio.btcMetrics.currentlyHeld, 8)} BTC</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">BTC Growth</p>
+                      <p className="text-2xl font-bold text-green-500">
+                        {(() => {
+                          // BTC Growth = (Current + Sold) - Acquired
+                          const totalAcquired = portfolio.btcMetrics.totalPurchased;
+                          const growth = (portfolio.btcMetrics.currentlyHeld + portfolio.btcMetrics.totalSold) - totalAcquired;
+                          return formatNumber(growth, 8);
+                        })()} BTC
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">BTC Percentage Growth</p>
+                      <p className="text-2xl font-bold text-green-500">
+                        {(() => {
+                          // BTC Growth % = BTC gained from trades / BTC holdings at trade time × 100
+                          const btcFromTrades = (portfolio.btcMetrics as any).btcFromTrades || 0;
+                          const btcHoldingsAtTradeTime = (portfolio.btcMetrics as any).btcHoldingsAtTradeTime || portfolio.btcMetrics.totalPurchased;
+                          const percentGrowth = btcHoldingsAtTradeTime > 0 ? (btcFromTrades / btcHoldingsAtTradeTime) * 100 : 0;
+                          return formatPercent(percentGrowth);
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+
+          </>
+        )}
+      </main>
+    </div>
+  );
+}

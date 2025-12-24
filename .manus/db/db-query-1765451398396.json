@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, userId, LENGTH(sfoxApiKey) as key_length, SUBSTRING(sfoxApiKey, 1, 100) as key_start FROM client_credentials;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user wW9zg8WGoGMRU7L.95d7c1b35d03 --database bpyxsGbJveG2EZMzoaDpDr --execute SELECT id, userId, LENGTH(sfoxApiKey) as key_length, SUBSTRING(sfoxApiKey, 1, 100) as key_start FROM client_credentials;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "90044",
+      "key_length": "194",
+      "key_start": "b3f309db585e4514f4be7f77071b3787:81aabf079229df85dc4761ec2ff451d7:561b747b17fbc509a4a44179a5459e479f"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tkey_length\tkey_start\n1\t90044\t194\tb3f309db585e4514f4be7f77071b3787:81aabf079229df85dc4761ec2ff451d7:561b747b17fbc509a4a44179a5459e479f\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}
