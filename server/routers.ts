@@ -127,6 +127,23 @@ export const appRouter = router({
             // Must have BTC-denominated price AND not be a BTC/USD trade
             return price > 0 && price < 0.01 && currency !== "btc" && currency !== "usd";
           });
+          
+          // Debug logging
+          console.log(`[BTC Growth Debug] Client ID: ${credentials.userId}`);
+          console.log(`[BTC Growth Debug] Total transactions: ${allTransactions.length}`);
+          console.log(`[BTC Growth Debug] BTC-pair trades found: ${btcPairTrades.length}`);
+          if (btcPairTrades.length > 0) {
+            console.log(`[BTC Growth Debug] Sample BTC-pair trade:`, JSON.stringify(btcPairTrades[0], null, 2));
+          } else {
+            // Log sample transactions to see their structure
+            const sampleTxs = allTransactions.slice(0, 5).map(tx => ({
+              currency: tx.currency,
+              price: tx.price,
+              amount: tx.amount,
+              action: tx.action
+            }));
+            console.log(`[BTC Growth Debug] Sample transactions:`, JSON.stringify(sampleTxs, null, 2));
+          }
                   
           // For BTC-pair trades, amount is in the crypto currency (SOL, LINK, etc.)
           // We need to multiply by price to get BTC value
