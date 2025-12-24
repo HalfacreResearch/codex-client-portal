@@ -1,0 +1,8 @@
+{
+  "query": "SELECT u.id, u.name, u.email, u.role, cc.id as cred_id FROM users u LEFT JOIN client_credentials cc ON u.id = cc.userId WHERE u.role = 'user' ORDER BY u.id",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user wW9zg8WGoGMRU7L.d978c3c228a8 --database RTJkzrv6w7yUxV7Qk7ZVTP --execute SELECT u.id, u.name, u.email, u.role, cc.id as cred_id FROM users u LEFT JOIN client_credentials cc ON u.id = cc.userId WHERE u.role = 'user' ORDER BY u.id",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'rtjkzrv6w7yuxv7qk7zvtp.client_credentials' doesn't exist"
+  ]
+}
