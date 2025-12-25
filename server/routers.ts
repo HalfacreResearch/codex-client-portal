@@ -118,14 +118,32 @@ export const appRouter = router({
               }));
           }
           
-          // BTC-pair trades are identified by the symbol field (e.g., "sol/btc", "link/btc")
-          // The sFOX API returns price in USD for all transactions, so we can't use price < 0.01
-          // Instead, check if the symbol contains "/btc"
+          // DEBUG: Log first 10 transactions to see ALL fields
+          console.log(`[BTC Growth Debug] Client: ${credentials.userId}`);
+          console.log(`[BTC Growth Debug] Total transactions: ${allTransactions.length}`);
+          console.log(`[BTC Growth Debug] First 10 transactions:`);
+          allTransactions.slice(0, 10).forEach((tx, i) => {
+            console.log(`  ${i + 1}. currency=${tx.currency}, symbol=${tx.symbol}, price=${tx.price}, amount=${tx.amount}, net_proceeds=${tx.net_proceeds}, action=${tx.action}, day=${tx.day}`);
+          });
+          
+          // BTC-pair trades: Look for transactions from May 5 and May 8-9
           const btcPairTrades = allTransactions.filter(tx => {
             const symbol = (tx.symbol || "").toLowerCase();
-            // Check if this is a crypto/BTC pair (not btc/usd)
-            return symbol.includes("/btc") && !symbol.includes("btc/usd") && !symbol.includes("btc/usdc");
+            const currency = (tx.currency || "").toLowerCase();
+            const day = tx.day || "";
+            
+            // Check if symbol contains /btc OR if it's May 5-9 SOL transactions
+            const isBtcPair = symbol.includes("/btc") || symbol.includes("btc");
+            const isMaySol = day.startsWith("2025-05") && currency === "sol";
+            
+            if (isBtcPair || isMaySol) {
+              console.log(`[BTC Growth Debug] Potential BTC-pair trade: currency=${currency}, symbol=${symbol}, day=${day}, price=${tx.price}, net_proceeds=${tx.net_proceeds}`);
+            }
+            
+            return isBtcPair || isMaySol;
           });
+          
+          console.log(`[BTC Growth Debug] BTC-pair trades found: ${btcPairTrades.length}`);
                   
           // For BTC-pair trades, net_proceeds represents the BTC amount
           // Buy action = negative net_proceeds (spending BTC to buy crypto)

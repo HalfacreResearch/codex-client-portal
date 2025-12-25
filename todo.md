@@ -86,3 +86,15 @@
 - [x] Fix: Use `symbol` field to detect BTC-pair trades (e.g., "sol/btc", "link/btc")
 - [x] Calculate BTC amount from net_proceeds field instead of using price
 - [x] Pushed to GitHub (commit af091dc)
+
+## STILL BROKEN - Symbol Field Fix Didn't Work (Dec 24, 2025 8:12 PM)
+- [ ] BTC Percentage Growth STILL showing 0% after deploying symbol field fix
+- [ ] Need to check: What does the symbol field actually contain for SOL/BTC trades?
+- [ ] Add debug logging to see what symbols are in the transactions
+- [ ] Verify the filter logic matches the actual data structure
+
+## NEED FULL TRANSACTION DATA (Dec 24, 2025 8:15 PM)
+- [ ] Add debug logging to dump ALL fields of ALL transactions
+- [ ] Check what the symbol field actually contains
+- [ ] Verify if SOL/BTC trades even exist in the sFOX API response
+- [ ] Compare API data structure to the CSV data we analyzed
