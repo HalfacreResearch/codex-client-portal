@@ -287,13 +287,7 @@ export default function ClientView() {
                     <div>
                       <p className="text-sm text-muted-foreground">BTC Percentage Growth</p>
                       <p className="text-2xl font-bold text-green-500">
-                        {(() => {
-                          // BTC Growth % = BTC gained from trades / BTC holdings at trade time × 100
-                          const btcFromTrades = (portfolio.btcMetrics as any).btcFromTrades || 0;
-                          const btcHoldingsAtTradeTime = (portfolio.btcMetrics as any).btcHoldingsAtTradeTime || portfolio.btcMetrics.totalPurchased;
-                          const percentGrowth = btcHoldingsAtTradeTime > 0 ? (btcFromTrades / btcHoldingsAtTradeTime) * 100 : 0;
-                          return formatPercent(percentGrowth);
-                        })()}
+                        {formatPercent((portfolio.btcMetrics as any).btcGrowthPercent || 0)}
                       </p>
                     </div>
                   </div>
