@@ -118,50 +118,25 @@ export const appRouter = router({
               }));
           }
           
-          // DEBUG: Log all transactions to see structure
-          console.log(`[BTC Growth Debug] Client ID: ${credentials.userId}`);
-          console.log(`[BTC Growth Debug] Total transactions: ${allTransactions.length}`);
-          
-          // Sample 10 transactions with different currencies
-          const sampleTxs = allTransactions.slice(0, 20).map(tx => ({
-            currency: tx.currency,
-            price: tx.price,
-            amount: tx.amount,
-            action: tx.action
-          }));
-          console.log(`[BTC Growth Debug] Sample transactions:`, JSON.stringify(sampleTxs, null, 2));
-          
-          // BTC-pair trades are crypto/BTC pairs (like SOL/BTC, LINK/BTC)
-          // They have BTC-denominated prices (0.0001 to 0.01) and currency is NOT 'btc' or 'usd'
-          // This excludes BTC/USD trades which have currency='btc'
+          // BTC-pair trades are identified by the symbol field (e.g., "sol/btc", "link/btc")
+          // The sFOX API returns price in USD for all transactions, so we can't use price < 0.01
+          // Instead, check if the symbol contains "/btc"
           const btcPairTrades = allTransactions.filter(tx => {
-            const price = tx.price || 0;
-            const currency = (tx.currency || "").toLowerCase();
-            // Must have BTC-denominated price AND not be a BTC/USD trade
-            return price > 0 && price < 0.01 && currency !== "btc" && currency !== "usd";
+            const symbol = (tx.symbol || "").toLowerCase();
+            // Check if this is a crypto/BTC pair (not btc/usd)
+            return symbol.includes("/btc") && !symbol.includes("btc/usd") && !symbol.includes("btc/usdc");
           });
-          
-          console.log(`[BTC Growth Debug] BTC-pair trades found: ${btcPairTrades.length}`);
-          if (btcPairTrades.length > 0) {
-            console.log(`[BTC Growth Debug] BTC-pair trades:`, JSON.stringify(btcPairTrades.map(tx => ({
-              currency: tx.currency,
-              price: tx.price,
-              amount: tx.amount,
-              action: tx.action
-            })), null, 2));
-          }
                   
-          // For BTC-pair trades, amount is in the crypto currency (SOL, LINK, etc.)
-          // We need to multiply by price to get BTC value
-          // Buy action = spending BTC to buy crypto
-          // Sell action = selling crypto for BTC (receiving BTC)
+          // For BTC-pair trades, net_proceeds represents the BTC amount
+          // Buy action = negative net_proceeds (spending BTC to buy crypto)
+          // Sell action = positive net_proceeds (selling crypto for BTC)
           const btcSpentOnTrades = btcPairTrades
             .filter(tx => tx.action === "Buy")
-            .reduce((sum, tx) => sum + Math.abs(tx.amount) * (tx.price || 0), 0);
+            .reduce((sum, tx) => sum + Math.abs(tx.net_proceeds || 0), 0);
           
           const btcReceivedFromTrades = btcPairTrades
             .filter(tx => tx.action === "Sell")
-            .reduce((sum, tx) => sum + Math.abs(tx.amount) * (tx.price || 0), 0);
+            .reduce((sum, tx) => sum + Math.abs(tx.net_proceeds || 0), 0);
           
           // Net BTC from trades
           const btcGrowth = btcReceivedFromTrades - btcSpentOnTrades;

@@ -73,3 +73,15 @@
 - [ ] Optimize API calls - reduce from 5 concurrent calls to 2-3 by reusing allTransactions data
 - [ ] Remove separate getDeposits() and getOrders() calls, extract from allTransactions instead
 - [ ] Fix BTC growth showing 0% - SOL/BTC trades not being detected by price < 0.01 filter
+
+## URGENT - BTC Growth Still Broken (Dec 24, 2025 8:00 PM)
+- [ ] BTC Percentage Growth STILL showing +0.00% after deploying fix
+- [ ] Debug: Check server logs for BTC-pair trade detection output
+- [ ] Investigate: Why are SOL/BTC trades not being detected by the filter?
+- [ ] Test: Verify the sFOX API data structure matches our assumptions
+
+## ROOT CAUSE FOUND (Dec 24, 2025 8:10 PM)
+- [x] Discovered: sFOX API returns `price` in USD for ALL transactions, not BTC
+- [x] The filter `price < 0.01` never matches because USD prices are ~$100-$150
+- [ ] Fix: Use `symbol` field to detect BTC-pair trades (e.g., "sol/btc", "link/btc")
+- [ ] Calculate BTC price from net_proceeds field instead of using price directly
