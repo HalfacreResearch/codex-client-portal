@@ -119,36 +119,19 @@ export const appRouter = router({
           }
           
           // BTC-pair trades are crypto/BTC pairs (like SOL/BTC, LINK/BTC)
-          // They have BTC-denominated prices (0.0001 to 0.01) and currency is NOT 'btc'
-          // This excludes BTC/USD trades which also have currency='btc'
+          // They have BTC-denominated prices (0.0001 to 0.01) and currency is NOT 'btc' or 'usd'
+          // This excludes BTC/USD trades which have currency='btc'
           const btcPairTrades = allTransactions.filter(tx => {
             const price = tx.price || 0;
             const currency = (tx.currency || "").toLowerCase();
             // Must have BTC-denominated price AND not be a BTC/USD trade
             return price > 0 && price < 0.01 && currency !== "btc" && currency !== "usd";
           });
-          
-          // Debug logging
-          console.log(`[BTC Growth Debug] Client ID: ${credentials.userId}`);
-          console.log(`[BTC Growth Debug] Total transactions: ${allTransactions.length}`);
-          console.log(`[BTC Growth Debug] BTC-pair trades found: ${btcPairTrades.length}`);
-          if (btcPairTrades.length > 0) {
-            console.log(`[BTC Growth Debug] Sample BTC-pair trade:`, JSON.stringify(btcPairTrades[0], null, 2));
-          } else {
-            // Log sample transactions to see their structure
-            const sampleTxs = allTransactions.slice(0, 5).map(tx => ({
-              currency: tx.currency,
-              price: tx.price,
-              amount: tx.amount,
-              action: tx.action
-            }));
-            console.log(`[BTC Growth Debug] Sample transactions:`, JSON.stringify(sampleTxs, null, 2));
-          }
                   
           // For BTC-pair trades, amount is in the crypto currency (SOL, LINK, etc.)
           // We need to multiply by price to get BTC value
-          // Buy action with negative amount = spending BTC to buy crypto
-          // Sell action with negative amount = selling crypto for BTC (receiving BTC)
+          // Buy action = spending BTC to buy crypto
+          // Sell action = selling crypto for BTC (receiving BTC)
           const btcSpentOnTrades = btcPairTrades
             .filter(tx => tx.action === "Buy")
             .reduce((sum, tx) => sum + Math.abs(tx.amount) * (tx.price || 0), 0);
@@ -161,23 +144,25 @@ export const appRouter = router({
           const btcGrowth = btcReceivedFromTrades - btcSpentOnTrades;
           
           // Calculate BTC holdings at time of first BTC-pair trade
-          // This accounts for deposits, BTC/USD buys, and BTC/USD sells before trading
+          // by reconstructing balance from transaction history
           let btcHoldingsAtTradeTime = btcDeposits; // Default to deposits
           
           if (btcPairTrades.length > 0) {
+            // Sort all BTC transactions by timestamp
+            const sortedBtcTxs = btcTransactions.sort((a, b) => a.timestamp - b.timestamp);
+            
             // Find timestamp of first BTC-pair trade
             const firstBtcPairTrade = btcPairTrades.sort((a, b) => a.timestamp - b.timestamp)[0];
             const firstTradeTimestamp = firstBtcPairTrade.timestamp;
             
-            // Sum all BTC transactions (deposits + buys - sells) BEFORE first BTC-pair trade
-            const btcBeforeTrade = btcTransactions
+            // Sum all BTC transactions that happened BEFORE the first BTC-pair trade
+            // This includes deposits (already counted) and any BTC/USD trades
+            const btcBeforeTrade = sortedBtcTxs
               .filter(tx => tx.timestamp < firstTradeTimestamp)
               .reduce((sum, tx) => sum + tx.amount, 0);
             
-            // Use the calculated balance if we have transaction history
-            if (btcBeforeTrade > 0) {
-              btcHoldingsAtTradeTime = btcBeforeTrade;
-            }
+            // BTC holdings = net BTC from all transactions before first trade (includes deposits)
+            btcHoldingsAtTradeTime = btcBeforeTrade;
           }
           
           const btcPrice = prices.btc || 0;
