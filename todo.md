@@ -94,7 +94,8 @@
 - [ ] Verify the filter logic matches the actual data structure
 
 ## NEED FULL TRANSACTION DATA (Dec 24, 2025 8:15 PM)
-- [ ] Add debug logging to dump ALL fields of ALL transactions
-- [ ] Check what the symbol field actually contains
-- [ ] Verify if SOL/BTC trades even exist in the sFOX API response
-- [ ] Compare API data structure to the CSV data we analyzed
+- [x] Add debug logging to dump ALL fields of ALL transactions
+- [x] Check what the symbol field actually contains
+- [x] Verify if SOL/BTC trades even exist in the sFOX API response
+- [x] Compare API data structure to the CSV data we analyzed
+- [x] Updated filter: Use price < 0.01 OR net_proceeds < 1 to detect BTC-pair trades

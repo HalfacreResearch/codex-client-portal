@@ -126,21 +126,28 @@ export const appRouter = router({
             console.log(`  ${i + 1}. currency=${tx.currency}, symbol=${tx.symbol}, price=${tx.price}, amount=${tx.amount}, net_proceeds=${tx.net_proceeds}, action=${tx.action}, day=${tx.day}`);
           });
           
-          // BTC-pair trades: Look for transactions from May 5 and May 8-9
+          // BTC-pair trades: Crypto trades where net_proceeds is in BTC (very small numbers)
+          // For SOL/BTC trades, net_proceeds will be ~0.05 BTC, not ~$1000 USD
+          // Filter: currency is NOT btc/usd AND net_proceeds < 1 (indicating BTC amounts)
           const btcPairTrades = allTransactions.filter(tx => {
-            const symbol = (tx.symbol || "").toLowerCase();
             const currency = (tx.currency || "").toLowerCase();
-            const day = tx.day || "";
+            const netProceeds = Math.abs(tx.net_proceeds || 0);
+            const price = tx.price || 0;
             
-            // Check if symbol contains /btc OR if it's May 5-9 SOL transactions
-            const isBtcPair = symbol.includes("/btc") || symbol.includes("btc");
-            const isMaySol = day.startsWith("2025-05") && currency === "sol";
+            // BTC-pair trades have:
+            // 1. Currency is crypto (not btc, not usd)
+            // 2. Price < 0.01 (BTC-denominated) OR net_proceeds < 1 (BTC amount)
+            const isCrypto = currency !== "btc" && currency !== "usd" && currency !== "usdc";
+            const hasBtcPrice = price > 0 && price < 0.01;
+            const hasBtcProceeds = netProceeds > 0 && netProceeds < 1;
             
-            if (isBtcPair || isMaySol) {
-              console.log(`[BTC Growth Debug] Potential BTC-pair trade: currency=${currency}, symbol=${symbol}, day=${day}, price=${tx.price}, net_proceeds=${tx.net_proceeds}`);
+            const isMatch = isCrypto && (hasBtcPrice || hasBtcProceeds);
+            
+            if (isMatch) {
+              console.log(`[BTC Growth Debug] Found BTC-pair trade: currency=${currency}, price=${price}, net_proceeds=${tx.net_proceeds}, amount=${tx.amount}, action=${tx.action}`);
             }
             
-            return isBtcPair || isMaySol;
+            return isMatch;
           });
           
           console.log(`[BTC Growth Debug] BTC-pair trades found: ${btcPairTrades.length}`);
