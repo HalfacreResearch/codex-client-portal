@@ -118,6 +118,19 @@ export const appRouter = router({
               }));
           }
           
+          // DEBUG: Log all transactions to see structure
+          console.log(`[BTC Growth Debug] Client ID: ${credentials.userId}`);
+          console.log(`[BTC Growth Debug] Total transactions: ${allTransactions.length}`);
+          
+          // Sample 10 transactions with different currencies
+          const sampleTxs = allTransactions.slice(0, 20).map(tx => ({
+            currency: tx.currency,
+            price: tx.price,
+            amount: tx.amount,
+            action: tx.action
+          }));
+          console.log(`[BTC Growth Debug] Sample transactions:`, JSON.stringify(sampleTxs, null, 2));
+          
           // BTC-pair trades are crypto/BTC pairs (like SOL/BTC, LINK/BTC)
           // They have BTC-denominated prices (0.0001 to 0.01) and currency is NOT 'btc' or 'usd'
           // This excludes BTC/USD trades which have currency='btc'
@@ -127,6 +140,16 @@ export const appRouter = router({
             // Must have BTC-denominated price AND not be a BTC/USD trade
             return price > 0 && price < 0.01 && currency !== "btc" && currency !== "usd";
           });
+          
+          console.log(`[BTC Growth Debug] BTC-pair trades found: ${btcPairTrades.length}`);
+          if (btcPairTrades.length > 0) {
+            console.log(`[BTC Growth Debug] BTC-pair trades:`, JSON.stringify(btcPairTrades.map(tx => ({
+              currency: tx.currency,
+              price: tx.price,
+              amount: tx.amount,
+              action: tx.action
+            })), null, 2));
+          }
                   
           // For BTC-pair trades, amount is in the crypto currency (SOL, LINK, etc.)
           // We need to multiply by price to get BTC value
