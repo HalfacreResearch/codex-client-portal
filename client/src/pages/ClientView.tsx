@@ -272,7 +272,12 @@ export default function ClientView() {
                       <p className="text-sm text-muted-foreground">BTC Growth</p>
                       <p className="text-2xl font-bold text-green-500">
                         {(() => {
-                          // BTC Growth = (Current + Sold) - Acquired
+                          // BTC Growth from BTC-pair trades only
+                          const btcFromTrades = (portfolio.btcMetrics as any).btcFromTrades;
+                          if (btcFromTrades !== undefined && btcFromTrades !== null) {
+                            return formatNumber(btcFromTrades, 8);
+                          }
+                          // Fallback to old calculation if field not present
                           const totalAcquired = portfolio.btcMetrics.totalPurchased;
                           const growth = (portfolio.btcMetrics.currentlyHeld + portfolio.btcMetrics.totalSold) - totalAcquired;
                           return formatNumber(growth, 8);
