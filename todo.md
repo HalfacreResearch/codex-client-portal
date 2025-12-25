@@ -83,5 +83,6 @@
 ## ROOT CAUSE FOUND (Dec 24, 2025 8:10 PM)
 - [x] Discovered: sFOX API returns `price` in USD for ALL transactions, not BTC
 - [x] The filter `price < 0.01` never matches because USD prices are ~$100-$150
-- [ ] Fix: Use `symbol` field to detect BTC-pair trades (e.g., "sol/btc", "link/btc")
-- [ ] Calculate BTC price from net_proceeds field instead of using price directly
+- [x] Fix: Use `symbol` field to detect BTC-pair trades (e.g., "sol/btc", "link/btc")
+- [x] Calculate BTC amount from net_proceeds field instead of using price
+- [x] Pushed to GitHub (commit af091dc)
