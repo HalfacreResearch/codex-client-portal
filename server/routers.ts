@@ -458,21 +458,16 @@ Please reach out to this client at your earliest convenience.
                 action: tx.action
               }));
             
-            // SIMPLE APPROACH: Extract BTC-pair trades for display
-            // Find all trades where symbol ends with "btc" (e.g., sol/btc, link/btc)
-            const btcPairTrades = allTransactions
+            // NET BTC GAINS APPROACH: Calculate net BTC from completed rotations
+            // Group buy/sell trades by pair and calculate net BTC gained
+            const btcPairTxs = allTransactions
               .filter(tx => {
                 const action = (tx.action || "").toLowerCase();
                 const symbol = (tx.symbol || "").toLowerCase();
                 const currency = (tx.currency || "").toLowerCase();
                 
-                // Must be a Buy or Sell action
                 if (action !== "buy" && action !== "sell") return false;
-                
-                // Must have a symbol that ends with "btc"
                 if (!symbol || !symbol.endsWith("btc")) return false;
-                
-                // Must NOT be BTC itself (exclude BTC/USD trades)
                 if (currency === "btc") return false;
                 
                 return true;
@@ -481,26 +476,48 @@ Please reach out to this client at your earliest convenience.
                 const isBuy = (tx.action || "").toLowerCase() === "buy";
                 const amount = Math.abs(tx.amount || 0);
                 const price = Math.abs(tx.price || 0);
-                const netProceeds = tx.net_proceeds || 0;
                 
-                // For BTC-pair trades:
-                // BUY: You spend BTC to buy crypto -> BTC amount = amount × price (negative)
-                // SELL: You sell crypto for BTC -> BTC amount = net_proceeds (positive)
-                const btcAmount = isBuy 
-                  ? -(amount * price)  // BTC spent
-                  : Math.abs(netProceeds);  // BTC received
+                // Calculate BTC amount: amount × price
+                // For BTC-pair trades, price is denominated in BTC per unit of crypto
+                // This works for both buy and sell
+                const btcAmount = amount * price;
                 
                 return {
                   date: tx.day,
-                  action: tx.action,
                   pair: (tx.symbol || "").toUpperCase(),
-                  btcAmount,
+                  currency: (tx.currency || "").toUpperCase(),
                   isBuy,
+                  btcSpent: isBuy ? btcAmount : 0,
+                  btcReceived: !isBuy ? btcAmount : 0,
                 };
-              })
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Most recent first
+              });
             
-            console.log(`[BTC Trades] Found ${btcPairTrades.length} BTC-pair trades for userId=${input.userId}`);
+            // Group by pair and calculate net BTC for each rotation
+            const rotationsByPair = new Map<string, { btcSpent: number; btcReceived: number; lastDate: string }>();
+            
+            btcPairTxs.forEach(tx => {
+              const existing = rotationsByPair.get(tx.pair) || { btcSpent: 0, btcReceived: 0, lastDate: tx.date };
+              rotationsByPair.set(tx.pair, {
+                btcSpent: existing.btcSpent + tx.btcSpent,
+                btcReceived: existing.btcReceived + tx.btcReceived,
+                lastDate: new Date(tx.date) > new Date(existing.lastDate) ? tx.date : existing.lastDate,
+              });
+            });
+            
+            // Convert to array with net BTC calculated
+            const btcPairTrades = Array.from(rotationsByPair.entries())
+              .map(([pair, data]) => ({
+                pair,
+                date: data.lastDate,
+                btcSpent: data.btcSpent,
+                btcReceived: data.btcReceived,
+                netBtc: data.btcReceived - data.btcSpent,
+                percentGain: data.btcSpent > 0 ? ((data.btcReceived - data.btcSpent) / data.btcSpent) * 100 : 0,
+              }))
+              .filter(trade => trade.btcSpent > 0 && trade.btcReceived > 0) // Only show completed rotations
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            console.log(`[BTC Rotations] Found ${btcPairTrades.length} completed rotations for userId=${input.userId}`);
 
             
             const btcPrice = prices.btc || 0;
@@ -511,7 +528,7 @@ Please reach out to this client at your earliest convenience.
               currentlyHeld: btcBalance.total,
               currentValue: btcBalance.total * btcPrice,
               price: btcPrice,
-              btcPairTrades, // Array of BTC-pair trades for display
+              btcPairTrades, // Array of completed rotations with net BTC // Array of BTC-pair trades for display
             };
             
 

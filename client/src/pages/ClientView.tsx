@@ -281,8 +281,10 @@ export default function ClientView() {
                         <TableRow>
                           <TableHead>Date</TableHead>
                           <TableHead>Pair</TableHead>
-                          <TableHead>Action</TableHead>
-                          <TableHead className="text-right">BTC Amount</TableHead>
+                          <TableHead className="text-right">BTC Spent</TableHead>
+                          <TableHead className="text-right">BTC Received</TableHead>
+                          <TableHead className="text-right">Net BTC</TableHead>
+                          <TableHead className="text-right">% Gain</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -291,22 +293,24 @@ export default function ClientView() {
                             <TableCell className="font-medium">
                               {formatDate(trade.date)}
                             </TableCell>
-                            <TableCell className="font-mono text-sm">
+                            <TableCell className="font-mono text-sm font-semibold">
                               {trade.pair}
                             </TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                trade.isBuy 
-                                  ? "bg-blue-100 text-blue-700" 
-                                  : "bg-green-100 text-green-700"
-                              }`}>
-                                {trade.action}
-                              </span>
+                            <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                              {formatNumber(trade.btcSpent, 8)} BTC
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                              {formatNumber(trade.btcReceived, 8)} BTC
+                            </TableCell>
+                            <TableCell className={`text-right font-mono text-sm font-bold ${
+                              trade.netBtc >= 0 ? "text-green-600" : "text-red-600"
+                            }`}>
+                              {trade.netBtc >= 0 ? "+" : ""}{formatNumber(trade.netBtc, 8)} BTC
                             </TableCell>
                             <TableCell className={`text-right font-mono text-sm font-semibold ${
-                              trade.btcAmount >= 0 ? "text-green-600" : "text-red-600"
+                              trade.percentGain >= 0 ? "text-green-600" : "text-red-600"
                             }`}>
-                              {trade.btcAmount >= 0 ? "+" : ""}{formatNumber(trade.btcAmount, 8)} BTC
+                              {trade.percentGain >= 0 ? "+" : ""}{formatNumber(trade.percentGain, 2)}%
                             </TableCell>
                           </TableRow>
                         ))}

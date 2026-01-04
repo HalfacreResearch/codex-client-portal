@@ -196,3 +196,19 @@
 - [x] For BUY trades: BTC spent = amount × price (negative)
 - [x] For SELL trades: BTC received = net_proceeds (positive)
 - [x] Fix applied - now shows actual BTC flow correctly
+
+
+## NEW REQUIREMENT - Show Only Net BTC Gains (Dec 25, 2025)
+- [x] Remove individual buy/sell display (confusing, looks like losses)
+- [x] Calculate net BTC gained by grouping buy/sell trades by pair
+- [x] Show only completed rotations with net result
+- [x] Display: Date | Pair | BTC Spent | BTC Received | Net BTC | % Gain
+- [x] Green for wins, red for losses
+- [x] Only show rotations where both buy and sell have occurred
+
+## URGENT - BTC Rotation Trades Showing Wrong Data (Jan 4, 2026)
+- [x] BTC Received column showing crypto amount (33.293 SOL) instead of BTC amount
+- [x] Need to match buy/sell pairs for same crypto (e.g., May 5 buy + May 8 sell = 1 rotation)
+- [x] Show ONLY completed rotations with net BTC result
+- [x] Fixed: Using amount × price to calculate BTC amounts for both buy and sell
+- [x] Glenn's SOL/BTC rotation now shows: +0.00144229 BTC gain (+2.81%)
