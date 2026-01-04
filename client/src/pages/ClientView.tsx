@@ -249,48 +249,70 @@ export default function ClientView() {
               </Card>
             </div>
 
-            {/* BTC Performance Card (conditional) */}
-            {portfolio.btcMetrics && (
+            {/* Debug Info */}
+            {(portfolio as any).debugTotalTransactions !== undefined && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm font-mono text-yellow-900">
+                  🐛 Debug: Fetched {(portfolio as any).debugTotalTransactions} transactions from sFOX API
+                </p>
+              </div>
+            )}
+            
+            {/* BTC Rotation Trades Card */}
+            {portfolio.btcMetrics && (portfolio.btcMetrics as any).btcPairTrades && (
               <Card className="bg-card border-border mb-6">
                 <CardHeader>
                   <CardTitle className="text-foreground flex items-center gap-2">
                     <Bitcoin className="h-5 w-5 text-primary" />
-                    BTC Performance
+                    BTC Rotation Trades
                   </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Trades executed using BTC as the trading pair to grow BTC holdings
+                  </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total BTC Purchased</p>
-                      <p className="text-2xl font-bold text-foreground">{formatNumber(portfolio.btcMetrics.totalPurchased, 8)} BTC</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">BTC Currently Held</p>
-                      <p className="text-2xl font-bold text-foreground">{formatNumber(portfolio.btcMetrics.currentlyHeld, 8)} BTC</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">BTC Growth</p>
-                      <p className="text-2xl font-bold text-green-500">
-                        {(() => {
-                          // BTC Growth from BTC-pair trades only
-                          const btcFromTrades = (portfolio.btcMetrics as any).btcFromTrades;
-                          if (btcFromTrades !== undefined && btcFromTrades !== null) {
-                            return formatNumber(btcFromTrades, 8);
-                          }
-                          // Fallback to old calculation if field not present
-                          const totalAcquired = portfolio.btcMetrics.totalPurchased;
-                          const growth = (portfolio.btcMetrics.currentlyHeld + portfolio.btcMetrics.totalSold) - totalAcquired;
-                          return formatNumber(growth, 8);
-                        })()} BTC
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">BTC Percentage Growth</p>
-                      <p className="text-2xl font-bold text-green-500">
-                        {formatPercent((portfolio.btcMetrics as any).btcGrowthPercent || 0)}
-                      </p>
-                    </div>
-                  </div>
+                  {(portfolio.btcMetrics as any).btcPairTrades.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">
+                      No BTC-pair trades found yet
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Pair</TableHead>
+                          <TableHead>Action</TableHead>
+                          <TableHead className="text-right">BTC Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(portfolio.btcMetrics as any).btcPairTrades.map((trade: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">
+                              {formatDate(trade.date)}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {trade.pair}
+                            </TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                trade.isBuy 
+                                  ? "bg-blue-100 text-blue-700" 
+                                  : "bg-green-100 text-green-700"
+                              }`}>
+                                {trade.action}
+                              </span>
+                            </TableCell>
+                            <TableCell className={`text-right font-mono text-sm font-semibold ${
+                              trade.btcAmount >= 0 ? "text-green-600" : "text-red-600"
+                            }`}>
+                              {trade.btcAmount >= 0 ? "+" : ""}{formatNumber(trade.btcAmount, 8)} BTC
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
               </Card>
             )}

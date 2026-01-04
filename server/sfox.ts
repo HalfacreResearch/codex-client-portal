@@ -110,9 +110,24 @@ export class SfoxClient {
    * Get all transactions (for detailed analysis).
    */
   async getAllTransactions(limit: number = 1000): Promise<SfoxTransactionFull[]> {
-    return this.request<SfoxTransactionFull[]>("/v1/account/transactions", {
-      limit: limit.toString(),
-    });
+    try {
+      // Fetch transactions from January 1, 2024 to capture all historical trades
+      const from = new Date("2024-01-01T00:00:00Z").getTime();
+      console.log(`[sFOX] Calling /v1/account/transactions with limit=${limit}, from=${new Date(from).toISOString()}`);
+      const result = await this.request<SfoxTransactionFull[]>("/v1/account/transactions", {
+        limit: limit.toString(),
+        from: from.toString(),
+      });
+      console.log(`[sFOX] Received ${result.length} transactions`);
+      if (result.length > 0) {
+        console.log(`[sFOX] First transaction:`, JSON.stringify(result[0], null, 2));
+      }
+      return result;
+    } catch (error: any) {
+      console.error(`[sFOX] Error fetching transactions:`, error.message);
+      console.error(`[sFOX] Error details:`, JSON.stringify(error.response?.data || error, null, 2));
+      throw error;
+    }
   }
 
   /**

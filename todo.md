@@ -168,3 +168,31 @@
 2. Test with Glenn's portfolio
 3. If still 0%, inspect actual transaction data to see symbol field values
 4. May need to use different field or heuristic to detect BTC-pair trades
+
+
+## CRITICAL - BTC Growth STILL 0% on Production (Dec 25, 2025 8:15 AM)
+- [ ] Production site (https://codexportal-rtjkzrv6.manus.space) shows Glenn's BTC Growth = 0.00%
+- [ ] Chronological calculation code is deployed but not detecting SOL/BTC trades
+- [ ] symbol.endsWith("btc") filter is not matching Glenn's actual transaction data
+- [ ] Need to examine actual sFOX API response to see what symbol field contains
+- [ ] Stop creating checkpoints until the fix is actually verified to work
+
+
+## FINAL APPROACH - Simple BTC Trade Table (Dec 25, 2025 12:15 PM)
+- [x] Show table: Date | Trading Pair | Action | Crypto Amount | BTC Amount
+- [x] Backend: Extract BTC-pair trades (symbol ends with "btc")
+- [x] Frontend: Display in clean table format
+- [x] Purpose: Clients see at a glance that rotations are being executed
+- [x] Keep USD Growth and Portfolio Overview cards unchanged
+- [x] **ROOT CAUSE FIXED**: sFOX API was only returning last 24hrs of transactions
+- [x] **SOLUTION**: Added `from` parameter to fetch from Jan 1, 2024
+
+- [x] **BUG**: Table showing crypto amount instead of BTC amounts for buy/sell
+- [x] **FIX APPLIED**: Show only BTC Amount column with signed values
+- [x] Buy trades = negative (red), Sell trades = positive (green)
+- [x] Removed irrelevant crypto amount column
+
+- [x] **CRITICAL BUG**: BTC amounts are wrong - showing crypto amount instead of BTC
+- [x] For BUY trades: BTC spent = amount × price (negative)
+- [x] For SELL trades: BTC received = net_proceeds (positive)
+- [x] Fix applied - now shows actual BTC flow correctly

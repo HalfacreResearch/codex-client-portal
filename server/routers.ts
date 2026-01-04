@@ -405,8 +405,18 @@ Please reach out to this client at your earliest convenience.
             getCryptoPrices(),
             client.getAllTransactions(1000),
           ]);
-
-          let totalValue = 0;
+          
+          console.log(`[Admin Portfolio] Fetched ${allTransactions.length} transactions for user ${input.userId}`);
+          if (allTransactions.length > 0) {
+            console.log(`[Admin Portfolio] First transaction:`, JSON.stringify(allTransactions[0], null, 2));
+          } else {
+            console.log(`[Admin Portfolio] WARNING: No transactions returned from sFOX API`);
+            console.log(`[Admin Portfolio] Balances count: ${balances.length}`);
+            console.log(`[Admin Portfolio] Deposits count: ${deposits.length}`);
+            console.log(`[Admin Portfolio] Orders count: ${orders.length}`);
+          }
+          
+          let totalValue = 0;;
           const balancesWithUsd = balances
             .filter(b => b.total > 0)
             .map(b => {
@@ -448,69 +458,50 @@ Please reach out to this client at your earliest convenience.
                 action: tx.action
               }));
             
-            // NEW APPROACH: Chronological BTC Growth Calculation
-            // Track BTC balance over time and calculate growth % for each BTC-pair trade
-            // relative to holdings at that moment
-            
-            // Sort transactions chronologically
-            const sortedTxs = [...allTransactions].sort((a, b) => 
-              new Date(a.day).getTime() - new Date(b.day).getTime()
-            );
-            
-            let runningBtcBalance = 0;
-            let totalBtcGrowthPercent = 0;
-            let btcTradeCount = 0;
-            
-            console.log(`[BTC Growth] Processing ${sortedTxs.length} transactions chronologically...`);
-            
-            for (const tx of sortedTxs) {
-              const currency = (tx.currency || "").toLowerCase();
-              const action = (tx.action || "").toLowerCase();
-              const symbol = (tx.symbol || "").toLowerCase();
-              const amount = tx.amount || 0;
-              const netProceeds = tx.net_proceeds || 0;
-              
-              // Track BTC balance changes
-              if (currency === "btc") {
-                if (action === "deposit" || action === "buy") {
-                  runningBtcBalance += amount;
-                  console.log(`[BTC Growth] ${tx.day}: ${action} ${amount} BTC → Balance: ${runningBtcBalance.toFixed(8)}`);
-                } else if (action === "withdraw" || action === "sell") {
-                  runningBtcBalance += amount; // amount is negative for sells
-                  console.log(`[BTC Growth] ${tx.day}: ${action} ${amount} BTC → Balance: ${runningBtcBalance.toFixed(8)}`);
-                }
-              }
-              
-              // Detect BTC-pair trades (symbol ends with "btc")
-              const isBtcPairTrade = (action === "buy" || action === "sell") && 
-                                      symbol && symbol.endsWith("btc") && 
-                                      currency !== "btc";
-              
-              if (isBtcPairTrade && runningBtcBalance > 0) {
+            // SIMPLE APPROACH: Extract BTC-pair trades for display
+            // Find all trades where symbol ends with "btc" (e.g., sol/btc, link/btc)
+            const btcPairTrades = allTransactions
+              .filter(tx => {
+                const action = (tx.action || "").toLowerCase();
+                const symbol = (tx.symbol || "").toLowerCase();
+                const currency = (tx.currency || "").toLowerCase();
+                
+                // Must be a Buy or Sell action
+                if (action !== "buy" && action !== "sell") return false;
+                
+                // Must have a symbol that ends with "btc"
+                if (!symbol || !symbol.endsWith("btc")) return false;
+                
+                // Must NOT be BTC itself (exclude BTC/USD trades)
+                if (currency === "btc") return false;
+                
+                return true;
+              })
+              .map(tx => {
+                const isBuy = (tx.action || "").toLowerCase() === "buy";
+                const amount = Math.abs(tx.amount || 0);
+                const price = Math.abs(tx.price || 0);
+                const netProceeds = tx.net_proceeds || 0;
+                
                 // For BTC-pair trades:
-                // - Buy action: spending BTC (net_proceeds is negative)
-                // - Sell action: receiving BTC (net_proceeds is positive)
-                const btcGainLoss = netProceeds;
-                const percentForThisTrade = (btcGainLoss / runningBtcBalance) * 100;
+                // BUY: You spend BTC to buy crypto -> BTC amount = amount × price (negative)
+                // SELL: You sell crypto for BTC -> BTC amount = net_proceeds (positive)
+                const btcAmount = isBuy 
+                  ? -(amount * price)  // BTC spent
+                  : Math.abs(netProceeds);  // BTC received
                 
-                totalBtcGrowthPercent += percentForThisTrade;
-                btcTradeCount++;
-                
-                console.log(`[BTC Growth] ${tx.day}: BTC-pair trade ${tx.symbol}`);
-                console.log(`  ${action} ${amount} ${currency.toUpperCase()} | BTC gain/loss: ${btcGainLoss.toFixed(8)}`);
-                console.log(`  Holdings at trade time: ${runningBtcBalance.toFixed(8)} BTC`);
-                console.log(`  % for this trade: ${percentForThisTrade.toFixed(4)}%`);
-                console.log(`  Cumulative %: ${totalBtcGrowthPercent.toFixed(4)}%`);
-                
-                // Update balance with BTC gain/loss from this trade
-                runningBtcBalance += btcGainLoss;
-              }
-            }
+                return {
+                  date: tx.day,
+                  action: tx.action,
+                  pair: (tx.symbol || "").toUpperCase(),
+                  btcAmount,
+                  isBuy,
+                };
+              })
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Most recent first
             
-            console.log(`[BTC Growth] Final results:`);
-            console.log(`  Total BTC-pair trades: ${btcTradeCount}`);
-            console.log(`  Total BTC Growth %: ${totalBtcGrowthPercent.toFixed(4)}%`);
-            console.log(`  Final BTC balance: ${runningBtcBalance.toFixed(8)}`);
+            console.log(`[BTC Trades] Found ${btcPairTrades.length} BTC-pair trades for userId=${input.userId}`);
+
             
             const btcPrice = prices.btc || 0;
             
@@ -520,48 +511,10 @@ Please reach out to this client at your earliest convenience.
               currentlyHeld: btcBalance.total,
               currentValue: btcBalance.total * btcPrice,
               price: btcPrice,
-              btcGrowthPercent: totalBtcGrowthPercent,
-              btcTradeCount,
+              btcPairTrades, // Array of BTC-pair trades for display
             };
             
-            console.log(`[BTC Growth] Final metrics for userId=${input.userId}:`);
-            console.log(`  BTC-pair trades: ${btcTradeCount}`);
-            console.log(`  Total BTC Growth %: ${totalBtcGrowthPercent.toFixed(4)}%`);
-            console.log(`  Current BTC balance: ${btcBalance.total.toFixed(8)}`);
-            
-            // Write first 20 transactions to file for debugging
-            try {
-              const fs = require('fs');
-              const debugData = {
-                userId: input.userId,
-                totalTransactions: allTransactions.length,
-                btcTradeCount,
-                btcGrowthPercent: totalBtcGrowthPercent,
-                first20Transactions: allTransactions.slice(0, 20).map((tx: any) => ({
-                  day: tx.day,
-                  action: tx.action,
-                  currency: tx.currency,
-                  amount: tx.amount,
-                  symbol: tx.symbol || "NULL",
-                  net_proceeds: tx.net_proceeds,
-                  price: tx.price,
-                })),
-              };
-              fs.writeFileSync('/tmp/glenn-transactions-debug.json', JSON.stringify(debugData, null, 2));
-              console.log('[BTC Growth] Debug data written to /tmp/glenn-transactions-debug.json');
-            } catch (e) {
-              console.error('[BTC Growth] Failed to write debug file:', e);
-            }
-            
-            // DEBUG: Add first 20 transactions to response
-            const debugTransactions = sortedTxs.slice(0, 20).map(tx => ({
-              day: tx.day,
-              action: tx.action,
-              currency: tx.currency,
-              amount: tx.amount,
-              symbol: tx.symbol || "NULL",
-              net_proceeds: tx.net_proceeds,
-            }));
+
           }
           const formattedOrders = orders.map(o => ({
             id: o.id,
@@ -587,6 +540,7 @@ Please reach out to this client at your earliest convenience.
             dollarGrowth,
             percentGrowth,
             btcMetrics,
+            debugTotalTransactions: allTransactions.length,
             debugTransactions: allTransactions.slice(0, 20).map((tx: any) => ({
               day: tx.day,
               action: tx.action,
