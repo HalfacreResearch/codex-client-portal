@@ -212,3 +212,10 @@
 - [x] Show ONLY completed rotations with net BTC result
 - [x] Fixed: Using amount × price to calculate BTC amounts for both buy and sell
 - [x] Glenn's SOL/BTC rotation now shows: +0.00144229 BTC gain (+2.81%)
+
+## Backup Synchronization (Jan 5, 2026)
+- [ ] Verify current live site code matches local project
+- [ ] Push latest code to GitHub repository
+- [ ] Create updated backup archive for Google Drive
+- [ ] Upload backup to Google Drive
+- [ ] Document backup restoration process for future tasks
