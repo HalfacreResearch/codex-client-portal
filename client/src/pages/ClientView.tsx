@@ -15,8 +15,6 @@ import {
   RefreshCw,
   TrendingUp,
   TrendingDown,
-  Wallet,
-  DollarSign,
   Bitcoin,
   ArrowLeft,
   LogOut,
@@ -114,7 +112,15 @@ export default function ClientView() {
     return null;
   }
 
+  // Calculate BTC CAGR metrics (same logic as Dashboard.tsx)
+  const btcFromTrades = (portfolio?.btcMetrics as any)?.btcFromTrades || 0;
+  const btcHoldingsAtTradeTime = (portfolio?.btcMetrics as any)?.btcHoldingsAtTradeTime || portfolio?.btcMetrics?.totalPurchased || 0;
+  const btcCagrPercent = btcHoldingsAtTradeTime > 0 ? (btcFromTrades / btcHoldingsAtTradeTime) * 100 : 0;
+  const currentBtc = portfolio?.btcMetrics?.currentlyHeld || 0;
+  const btcPrice = portfolio?.btcMetrics?.price || 0;
+  const btcUsdValue = currentBtc * btcPrice;
   const isPositiveGrowth = (portfolio?.dollarGrowth || 0) >= 0;
+  const isPositiveBtcCagr = btcCagrPercent >= 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -167,7 +173,7 @@ export default function ClientView() {
         {!portfolio?.hasCredentials || portfolio.error ? (
           <Card className="bg-card border-border">
             <CardContent className="flex flex-col items-center justify-center py-16">
-              <Wallet className="h-16 w-16 text-muted-foreground mb-4" />
+              <Bitcoin className="h-16 w-16 text-muted-foreground mb-4" />
               <h2 className="text-xl font-semibold text-foreground mb-2">No Portfolio Data</h2>
               <p className="text-muted-foreground text-center max-w-md">
                 {portfolio?.error || "This client doesn't have an API key configured yet."}
@@ -176,87 +182,102 @@ export default function ClientView() {
           </Card>
         ) : (
           <>
-            {/* Top Row: Portfolio Overview & USD Growth */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Portfolio Overview Card */}
-              <Card className="bg-card border-border">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-foreground flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-primary" />
-                    Portfolio Overview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-6">
-                    <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
-                    <p className="text-4xl font-bold text-foreground">{formatCurrency(portfolio.totalValue)}</p>
+            {/* ===== HERO: BTC Holdings + BTC CAGR ===== */}
+            <div
+              className="rounded-lg mb-8 p-8 text-center relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #0f0f0f 0%, #1a1200 50%, #0f0f0f 100%)", border: "1px solid rgba(247,147,26,0.3)" }}
+            >
+              <p className="text-sm font-semibold tracking-widest mb-6" style={{ color: "#f7931a", textTransform: "uppercase" }}>
+                Bitcoin Performance
+              </p>
+              <div className="flex flex-col md:flex-row items-center justify-center gap-12">
+                {/* BTC Holdings */}
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bitcoin className="w-6 h-6" style={{ color: "#f7931a" }} />
+                    <span className="text-sm text-muted-foreground uppercase tracking-wider">BTC Holdings</span>
                   </div>
-                  <div className="space-y-3">
-                    {portfolio.balances.map((balance: any) => (
-                      <div key={balance.currency} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                            <span className="text-xs font-bold text-foreground uppercase">{balance.currency.slice(0, 3)}</span>
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground uppercase">{balance.currency}</p>
-                            <p className="text-sm text-muted-foreground">{formatNumber(balance.total)} {balance.currency.toUpperCase()}</p>
-                          </div>
-                        </div>
-                        <p className="font-semibold text-foreground">{formatCurrency(balance.usdValue)}</p>
-                      </div>
-                    ))}
-                    {portfolio.balances.length === 0 && (
-                      <p className="text-muted-foreground text-center py-4">No holdings found</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                  <p className="text-6xl font-black leading-none" style={{ color: "#f7931a" }}>
+                    {formatNumber(currentBtc, 8)}
+                  </p>
+                  <p className="text-lg text-muted-foreground mt-1">BTC</p>
+                  <p className="text-sm text-muted-foreground mt-1">{formatCurrency(btcUsdValue)} USD</p>
+                </div>
 
-              {/* USD Growth Metrics Card */}
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="text-foreground flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-primary" />
-                    USD Growth Metrics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total USD Deposited</p>
-                      <p className="text-2xl font-bold text-foreground">{formatCurrency(portfolio.totalDeposited)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Current Portfolio Value</p>
-                      <p className="text-2xl font-bold text-foreground">{formatCurrency(portfolio.totalValue)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Dollar Growth</p>
-                      <p className={`text-2xl font-bold flex items-center gap-2 ${isPositiveGrowth ? "text-green-500" : "text-red-500"}`}>
-                        {isPositiveGrowth ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
-                        {formatCurrency(Math.abs(portfolio.dollarGrowth))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Percentage Growth</p>
-                      <p className={`text-2xl font-bold ${isPositiveGrowth ? "text-green-500" : "text-red-500"}`}>
-                        {formatPercent(portfolio.percentGrowth)}
-                      </p>
-                    </div>
+                {/* Divider */}
+                <div className="hidden md:block w-px h-24 bg-border" />
+
+                {/* BTC CAGR */}
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2 mb-1">
+                    {isPositiveBtcCagr
+                      ? <TrendingUp className="w-6 h-6 text-green-500" />
+                      : <TrendingDown className="w-6 h-6 text-red-500" />}
+                    <span className="text-sm text-muted-foreground uppercase tracking-wider">BTC CAGR</span>
                   </div>
-                </CardContent>
-              </Card>
+                  <p className={`text-6xl font-black leading-none ${isPositiveBtcCagr ? "text-green-500" : "text-red-500"}`}>
+                    {formatPercent(btcCagrPercent)}
+                  </p>
+                  <p className="text-lg text-muted-foreground mt-1">annualized in BTC terms</p>
+                </div>
+              </div>
             </div>
 
-            {/* Debug Info */}
-            {(portfolio as any).debugTotalTransactions !== undefined && (
-              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm font-mono text-yellow-900">
-                  🐛 Debug: Fetched {(portfolio as any).debugTotalTransactions} transactions from sFOX API
+            {/* ===== USD Metrics (secondary) ===== */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="rounded-lg border border-border bg-card p-4 text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">USD Deposited</p>
+                <p className="text-xl font-bold text-foreground">{formatCurrency(portfolio.totalDeposited)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4 text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Portfolio Value</p>
+                <p className="text-xl font-bold text-foreground">{formatCurrency(portfolio.totalValue)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4 text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">USD Growth</p>
+                <p className={`text-xl font-bold ${isPositiveGrowth ? "text-green-500" : "text-red-500"}`}>
+                  {isPositiveGrowth ? "+" : "-"}{formatCurrency(Math.abs(portfolio.dollarGrowth))}
                 </p>
               </div>
-            )}
+              <div className="rounded-lg border border-border bg-card p-4 text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">USD Return</p>
+                <p className={`text-xl font-bold ${isPositiveGrowth ? "text-green-500" : "text-red-500"}`}>
+                  {formatPercent(portfolio.percentGrowth)}
+                </p>
+              </div>
+            </div>
+
+            {/* ===== Holdings Breakdown ===== */}
+            <Card className="bg-card border-border mb-6">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <Bitcoin className="h-5 w-5 text-primary" />
+                  Holdings Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {portfolio.balances?.map((balance: any) => (
+                    <div key={balance.currency} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                          <span className="text-xs font-bold text-foreground uppercase">{balance.currency.slice(0, 3)}</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground uppercase">{balance.currency}</p>
+                          <p className="text-sm text-muted-foreground">{formatNumber(balance.total, balance.currency === "USD" ? 2 : 8)} {balance.currency.toUpperCase()}</p>
+                        </div>
+                      </div>
+                      <p className="font-semibold text-foreground">{formatCurrency(balance.usdValue)}</p>
+                    </div>
+                  ))}
+                  {(!portfolio.balances || portfolio.balances.length === 0) && (
+                    <p className="text-muted-foreground text-center py-4">No holdings found</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             
             {/* BTC Rotation Trades Card */}
             {portfolio.btcMetrics && (portfolio.btcMetrics as any).btcPairTrades && (
