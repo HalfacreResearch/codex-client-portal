@@ -1,19 +1,25 @@
+import { useState, useEffect } from "react";
+import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
-import { Wallet, Shield, TrendingUp, BarChart3 } from "lucide-react";
 
 export default function Home() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
   const [, setLocation] = useLocation();
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const requestMagicLink = trpc.auth.requestMagicLink.useMutation({
+    onSuccess: () => setSubmitted(true),
+    onError: (err) => setError(err.message || "Failed to send login link. Please try again."),
+  });
 
   useEffect(() => {
-    if (!loading && isAuthenticated) {
-      setLocation("/dashboard");
+    if (!loading && isAuthenticated && user) {
+      setLocation(user.role === "admin" ? "/admin" : "/dashboard");
     }
-  }, [isAuthenticated, loading, setLocation]);
+  }, [isAuthenticated, loading, user, setLocation]);
 
   if (loading) {
     return (
@@ -23,137 +29,113 @@ export default function Home() {
     );
   }
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    requestMagicLink.mutate({ email: email.trim().toLowerCase() });
+  };
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlError = urlParams.get("error");
+  const errorMessages: Record<string, string> = {
+    invalid_token: "This login link is invalid. Please request a new one.",
+    expired_token: "This login link has expired. Please request a new one.",
+    user_not_found: "No account found with that email. Please contact your advisor.",
+    server_error: "Something went wrong. Please try again.",
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border">
-        <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <img src="/logo.webp" alt="BTC Treasury Codex" className="w-10 h-10 rounded-lg object-cover" />
-            <span className="text-xl font-bold text-foreground">BTC Treasury Codex</span>
-          </div>
-          <Button
-            onClick={() => window.location.href = getLoginUrl()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            Login
-          </Button>
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="border-b border-border/40 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center gap-3">
+          <img src="/logo.webp" alt="BTC Treasury Codex" className="w-9 h-9 rounded-lg object-cover" />
+          <span className="text-lg font-bold text-foreground tracking-tight">BTC Treasury Codex</span>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <main>
-        <section className="py-24 md:py-32">
-          <div className="container">
-            <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
-                Your Crypto Portfolio,{" "}
-                <span className="text-primary">Simplified</span>
-              </h1>
-              <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Access your sFOX trading account dashboard with real-time portfolio tracking, 
-                growth metrics, and trade history — all in one secure portal.
-              </p>
-              <Button
-                size="lg"
-                onClick={() => window.location.href = getLoginUrl()}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6"
-              >
-                Login to Dashboard
-              </Button>
+      <main className="flex-1 flex items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
+              <img src="/logo.webp" alt="" className="w-10 h-10 rounded-xl object-cover" />
             </div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Client Portal</h1>
+            <p className="text-muted-foreground text-sm">BTC Treasury Codex — Secure access to your portfolio</p>
           </div>
-        </section>
 
-        {/* Features Section */}
-        <section className="py-16 border-t border-border">
-          <div className="container">
-            <h2 className="text-2xl font-bold text-foreground text-center mb-12">
-              Everything You Need to Track Your Portfolio
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <FeatureCard
-                icon={<Wallet className="h-8 w-8" />}
-                title="Portfolio Overview"
-                description="View your total portfolio value and individual cryptocurrency holdings in real-time."
-              />
-              <FeatureCard
-                icon={<TrendingUp className="h-8 w-8" />}
-                title="Growth Metrics"
-                description="Track your USD deposits, current value, and overall portfolio growth percentage."
-              />
-              <FeatureCard
-                icon={<BarChart3 className="h-8 w-8" />}
-                title="Trade History"
-                description="Review your recent trades with detailed information on each transaction."
-              />
-              <FeatureCard
-                icon={<Shield className="h-8 w-8" />}
-                title="Secure Access"
-                description="Login securely with your email — no passwords to remember."
-              />
-            </div>
-          </div>
-        </section>
+          <div className="bg-card border border-border rounded-xl p-8 shadow-lg">
+            {submitted ? (
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-5">
+                  <svg className="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-foreground mb-2">Check your email</h2>
+                <p className="text-muted-foreground text-sm mb-6">
+                  We sent a login link to <span className="text-foreground font-medium">{email}</span>. Click the link to access your dashboard.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Link expires in 15 minutes.{" "}
+                  <button onClick={() => { setSubmitted(false); setError(null); }} className="text-primary hover:underline">
+                    Try again
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-xl font-semibold text-foreground mb-1">Sign in</h2>
+                <p className="text-muted-foreground text-sm mb-6">Enter your email and we will send you a secure login link.</p>
 
-        {/* CTA Section */}
-        <section className="py-16 border-t border-border">
-          <div className="container">
-            <div className="max-w-2xl mx-auto text-center">
-              <h2 className="text-2xl font-bold text-foreground mb-4">
-                Ready to View Your Portfolio?
-              </h2>
-              <p className="text-muted-foreground mb-8">
-                Login with your email to access your personalized dashboard.
-              </p>
-              <Button
-                size="lg"
-                onClick={() => window.location.href = getLoginUrl()}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                Get Started
-              </Button>
-            </div>
+                {(urlError || error) && (
+                  <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-lg px-4 py-3 mb-5">
+                    {urlError ? errorMessages[urlError] ?? "An error occurred." : error}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1.5">Email address</label>
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={requestMagicLink.isPending}
+                    className="w-full bg-primary hover:bg-primary/90 disabled:opacity-60 text-primary-foreground font-semibold py-2.5 px-4 rounded-lg text-sm transition-colors"
+                  >
+                    {requestMagicLink.isPending ? "Sending..." : "Send Login Link"}
+                  </button>
+                </form>
+                <p className="text-xs text-muted-foreground text-center mt-5">No password needed. We will email you a secure one-time link.</p>
+              </>
+            )}
           </div>
-        </section>
+
+          <p className="text-center text-xs text-muted-foreground mt-6">
+            Need help? Contact{" "}
+            <a href="mailto:matt@codexyield.com" className="text-primary hover:underline">matt@codexyield.com</a>
+          </p>
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-8">
-        <div className="container">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-sm font-bold text-primary-foreground">C</span>
-              </div>
-              <span className="font-semibold text-foreground">BTC Treasury Codex</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              © 2025 BTC Treasury Codex. All Rights Reserved.
-            </p>
-          </div>
+      <footer className="border-t border-border/40 py-5 px-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">2025 BTC Treasury Codex</span>
+          <span className="text-xs text-muted-foreground">Powered by sFOX</span>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="p-6 rounded-lg bg-card border border-border">
-      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary mb-4">
-        {icon}
-      </div>
-      <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
-      <p className="text-muted-foreground text-sm">{description}</p>
     </div>
   );
 }

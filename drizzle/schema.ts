@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -49,3 +49,49 @@ export const supportRequests = mysqlTable("support_requests", {
 
 export type SupportRequest = typeof supportRequests.$inferSelect;
 export type InsertSupportRequest = typeof supportRequests.$inferInsert;
+
+/**
+ * Magic link tokens for passwordless email authentication.
+ * Tokens expire after 15 minutes and can only be used once.
+ */
+export const magicLinkTokens = mysqlTable("magic_link_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  used: boolean("used").default(false).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
+export type InsertMagicLinkToken = typeof magicLinkTokens.$inferInsert;
+
+/**
+ * Intelligence reports uploaded by admin for clients.
+ */
+export const reports = mysqlTable("reports", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  month: varchar("month", { length: 7 }).notNull(), // e.g. "2025-03"
+  fileUrl: text("fileUrl").notNull(), // URL to the uploaded PDF
+  publishedAt: timestamp("publishedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Report = typeof reports.$inferSelect;
+export type InsertReport = typeof reports.$inferInsert;
+
+/**
+ * Admin messages sent to individual clients or all clients.
+ */
+export const adminMessages = mysqlTable("admin_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  toUserId: int("toUserId"), // null = broadcast to all
+  subject: varchar("subject", { length: 255 }).notNull(),
+  body: text("body").notNull(),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AdminMessage = typeof adminMessages.$inferSelect;
+export type InsertAdminMessage = typeof adminMessages.$inferInsert;

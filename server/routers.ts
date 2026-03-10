@@ -1,12 +1,37 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { and, eq, gt } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { createTransport } from "nodemailer";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { ENV } from "./_core/env";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { getClientCredentials, createSupportRequest, upsertClientCredentials, getAllClients, createClient, deleteClientCredentials, getUserById } from "./db";
+import { getClientCredentials, createSupportRequest, upsertClientCredentials, getAllClients, createClient, deleteClientCredentials, getUserById, getUserByEmail, getDb } from "./db";
+import { magicLinkTokens } from "../drizzle/schema";
 import { SfoxClient, getCryptoPrices } from "./sfox";
 import { notifyOwner } from "./_core/notification";
+
+const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000;
+
+async function sendMagicLinkEmail(email: string, name: string | null, magicUrl: string) {
+  const mailer = createTransport({
+    host: ENV.smtpHost,
+    port: ENV.smtpPort,
+    secure: ENV.smtpPort === 465,
+    auth: { user: ENV.smtpUser, pass: ENV.smtpPass },
+  });
+  const displayName = name || "there";
+  await mailer.sendMail({
+    from: `"BTC Treasury Codex" <${ENV.smtpFrom}>`,
+    to: email,
+    subject: "Your login link for BTC Treasury Codex",
+    html: `<!DOCTYPE html><html><body style="background:#0a0a0a;color:#fff;font-family:sans-serif;padding:40px;max-width:600px;margin:0 auto;"><h1 style="color:#f7931a;">BTC Treasury Codex</h1><p>Hi ${displayName},</p><p>Click the button below to log in to your Codex client portal. This link expires in 15 minutes.</p><div style="text-align:center;margin:40px 0;"><a href="${magicUrl}" style="background:#f7931a;color:#000;text-decoration:none;padding:16px 32px;border-radius:4px;font-size:16px;font-weight:bold;">Log In to Codex Portal</a></div><p style="color:#888;font-size:14px;">If you did not request this, ignore this email.</p><p style="color:#888;font-size:12px;">${magicUrl}</p></body></html>`,
+    text: `Hi ${displayName},\n\nLogin link (expires in 15 minutes):\n${magicUrl}\n\nIf you did not request this, ignore this email.`,
+  });
+}
 
 // Admin-only procedure - checks if user has admin role
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -26,6 +51,21 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    requestMagicLink: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const user = await getUserByEmail(input.email.toLowerCase().trim());
+        // Always return success to prevent email enumeration
+        if (!user) return { success: true, message: "If that email is registered, a login link has been sent." };
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+        const token = nanoid(64);
+        const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MS);
+        await database.insert(magicLinkTokens).values({ email: input.email.toLowerCase().trim(), token, expiresAt });
+        const magicUrl = `${ENV.appUrl}/api/auth/verify?token=${token}`;
+        await sendMagicLinkEmail(input.email, user.name, magicUrl);
+        return { success: true, message: "Login link sent. Check your email." };
+      }),
   }),
 
   portfolio: router({
