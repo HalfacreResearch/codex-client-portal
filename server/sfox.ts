@@ -95,7 +95,8 @@ export class SfoxClient {
 
   /**
    * Get current market prices from sFOX for a set of currency pairs.
-   * Uses /v1/offer/buy?quantity=1&pair=XXXUSD to get the current best price.
+   * Uses /v1/offer/buy?quantity=10&pair=XXXUSD to get the current best price.
+   * quantity=10 ensures we meet sFOX's $5 minimum order for low-price assets like XRP.
    * Fetches prices for all currencies in the provided list.
    *
    * Returns a map of currency → USD price, e.g. { btc: 83000, eth: 2100, ... }
@@ -109,7 +110,7 @@ export class SfoxClient {
       try {
         const pair = `${currency}usd`;
         const result = await this.request<SfoxOrderEstimate>(`/v1/offer/buy`, {
-          quantity: "1",
+          quantity: "10", // Must be >=10 to meet sFOX $5 minimum for low-price assets (e.g. XRP ~$1.38)
           pair,
         });
         const price = Number(result.price) || Number(result.vwap) || 0;
