@@ -1,118 +1,164 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LogOut, Phone, TrendingUp, TrendingDown, Share2, Bitcoin, DollarSign, BarChart3, Clock, RefreshCw } from "lucide-react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { toast } from "sonner";
-import {
-  RefreshCw,
-  TrendingUp,
-  Wallet,
-  Bitcoin,
-  Phone,
-  LogOut,
-  Share2,
-} from "lucide-react";
-import { useState } from "react";
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmtBtc(n: number) {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+}
+function fmtUsd(n: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+}
+function fmtPct(n: number) {
+  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+function fmtTimeAgo(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function formatNumber(value: number, decimals: number = 4): string {
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value);
+// ─── Shareable Card Generator ─────────────────────────────────────────────────
+
+function downloadShareCard(alphaPercent: number, joinDate: string | null, btcPrice: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1080;
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.fillStyle = "#0a0a0a";
+  ctx.fillRect(0, 0, 1080, 1080);
+
+  ctx.fillStyle = "#f7931a";
+  ctx.fillRect(0, 0, 1080, 8);
+
+  ctx.fillStyle = "#f7931a";
+  ctx.font = "bold 40px Arial";
+  ctx.fillText("BTC Treasury Codex", 80, 110);
+
+  ctx.fillStyle = "#666";
+  ctx.font = "26px Arial";
+  ctx.fillText("Client Performance Report", 80, 155);
+
+  ctx.strokeStyle = "#222";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(80, 185);
+  ctx.lineTo(1000, 185);
+  ctx.stroke();
+
+  const isPositive = alphaPercent >= 0;
+  ctx.fillStyle = isPositive ? "#22c55e" : "#ef4444";
+  ctx.font = "bold 170px Arial";
+  const alphaStr = `${isPositive ? "+" : ""}${alphaPercent.toFixed(1)}%`;
+  const tw = ctx.measureText(alphaStr).width;
+  ctx.fillText(alphaStr, (1080 - tw) / 2, 490);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 44px Arial";
+  const label = "More BTC Than Buy & Hold";
+  const lw = ctx.measureText(label).width;
+  ctx.fillText(label, (1080 - lw) / 2, 570);
+
+  ctx.fillStyle = "#888";
+  ctx.font = "28px Arial";
+  const sub = "BTC-denominated alpha vs. passive DCA strategy";
+  const sw = ctx.measureText(sub).width;
+  ctx.fillText(sub, (1080 - sw) / 2, 625);
+
+  if (joinDate) {
+    const d = new Date(joinDate);
+    const joinStr = `Member since ${d.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`;
+    ctx.fillStyle = "#555";
+    ctx.font = "24px Arial";
+    const jw = ctx.measureText(joinStr).width;
+    ctx.fillText(joinStr, (1080 - jw) / 2, 710);
+  }
+
+  ctx.fillStyle = "#444";
+  ctx.font = "22px Arial";
+  const priceStr = `BTC price at time of report: ${fmtUsd(btcPrice)}`;
+  const pw = ctx.measureText(priceStr).width;
+  ctx.fillText(priceStr, (1080 - pw) / 2, 790);
+
+  ctx.fillStyle = "#f7931a";
+  ctx.fillRect(0, 1040, 1080, 8);
+  ctx.fillStyle = "#333";
+  ctx.font = "22px Arial";
+  ctx.fillText("client.codexyield.com  ·  Powered by BTC Treasury Codex", 80, 1028);
+
+  const link = document.createElement("a");
+  link.download = "codex-btc-alpha.png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
 }
 
-function formatPercent(value: number): string {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  const {
-    data: portfolio,
-    isLoading,
-    refetch,
-  } = trpc.portfolio.getData.useQuery(undefined, {
-    refetchOnWindowFocus: false,
+  const [, setLocation] = useLocation();
+  const requestCallMutation = trpc.support.requestCall.useMutation();
+
+  const { data, isLoading, error, refetch, isRefetching } = trpc.portfolio.getData.useQuery(undefined, {
+    retry: 1,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60 * 1000, // auto-refresh every 5 min to match sync cycle
   });
 
-  const requestCallMutation = trpc.support.requestCall.useMutation({
-    onSuccess: () => {
-      toast.success("Call request submitted! Our team will contact you soon.");
-    },
-    onError: () => {
-      toast.error("Failed to submit request. Please try again.");
-    },
-  });
+  const handleLogout = useCallback(async () => {
+    await logout();
+    setLocation("/");
+  }, [logout, setLocation]);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refetch();
-    setIsRefreshing(false);
-    toast.success("Portfolio data refreshed");
-  };
+  const snap = data?.snapshot;
 
-  const handleRequestCall = () => {
-    requestCallMutation.mutate();
-  };
+  const handleShare = useCallback(() => {
+    if (!snap) return;
+    downloadShareCard(parseFloat(String(snap.alphaPercent)), snap.joinDate, snap.btcPrice);
+  }, [snap]);
 
-  const handleLogout = () => {
-    logout();
-  };
+  if (isLoading) return <DashboardSkeleton />;
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full bg-card border-border">
+          <CardContent className="pt-6 text-center">
+            <p className="text-destructive mb-4">Unable to load your portfolio. Please try again.</p>
+            <Button onClick={handleLogout} variant="outline">Log Out</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
-  if (!portfolio?.hasCredentials || portfolio.error) {
+  if (!data.hasCredentials) {
     return (
       <div className="min-h-screen bg-background">
-        <Header userName={user?.name} userRole={user?.role} onLogout={handleLogout} onRequestCall={handleRequestCall} isRequestingCall={requestCallMutation.isPending} />
-        <main className="container py-8">
-          <Card className="bg-card border-border">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <Wallet className="h-16 w-16 text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">Account Setup in Progress</h2>
-              <p className="text-muted-foreground text-center max-w-md">
-                {portfolio?.error || "Your account is being set up. Please contact us if you need assistance."}
-              </p>
-              <Button
-                onClick={handleRequestCall}
-                disabled={requestCallMutation.isPending}
-                className="mt-6 bg-primary hover:bg-primary/90"
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                Request a Call
+        <Header userName={user?.name} userRole={user?.role} onLogout={handleLogout} onRequestCall={() => requestCallMutation.mutate()} isRequestingCall={requestCallMutation.isPending} />
+        <main className="container py-12 max-w-2xl">
+          <Card className="bg-card border-border text-center py-12">
+            <CardContent>
+              <Bitcoin className="h-12 w-12 text-primary mx-auto mb-4 opacity-50" />
+              <h2 className="text-xl font-bold mb-2">Account Setup in Progress</h2>
+              <p className="text-muted-foreground mb-6">Your account is being configured. Please contact us if you need assistance.</p>
+              <Button onClick={() => requestCallMutation.mutate()} disabled={requestCallMutation.isPending} className="bg-primary hover:bg-primary/90 text-black font-bold">
+                <Phone className="h-4 w-4 mr-2" />Request a Call
               </Button>
             </CardContent>
           </Card>
@@ -121,270 +167,204 @@ export default function Dashboard() {
     );
   }
 
-  // Calculate BTC CAGR metrics
-  const btcFromTrades = (portfolio.btcMetrics as any)?.btcFromTrades || 0;
-  const btcHoldingsAtTradeTime = (portfolio.btcMetrics as any)?.btcHoldingsAtTradeTime || portfolio.btcMetrics?.totalPurchased || 0;
-  const btcCagrPercent = btcHoldingsAtTradeTime > 0 ? (btcFromTrades / btcHoldingsAtTradeTime) * 100 : 0;
-  const currentBtc = portfolio.btcMetrics?.currentlyHeld || 0;
-  const btcPrice = portfolio.btcMetrics?.price || 0;
-  const btcUsdValue = currentBtc * btcPrice;
-  const [showShareCard, setShowShareCard] = useState(false);
+  // Sync pending — first sync hasn't completed yet
+  if (data.syncPending || !snap) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header userName={user?.name} userRole={user?.role} onLogout={handleLogout} onRequestCall={() => requestCallMutation.mutate()} isRequestingCall={requestCallMutation.isPending} />
+        <main className="container py-12 max-w-2xl">
+          <Card className="bg-card border-border text-center py-12">
+            <CardContent>
+              <RefreshCw className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
+              <h2 className="text-xl font-bold mb-2">Syncing Your Portfolio</h2>
+              <p className="text-muted-foreground mb-6">
+                Your portfolio data is being synced from sFOX. This typically takes less than a minute.
+                This page will refresh automatically.
+              </p>
+              <Button onClick={() => refetch()} disabled={isRefetching} variant="outline" className="border-primary text-primary">
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+                Check Again
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  const isAhead = snap.alphaBtc >= 0;
+
+  // Thin timeline to ≤60 points for chart performance
+  const rawTimeline = snap.chartData || [];
+  const step = Math.max(1, Math.floor(rawTimeline.length / 60));
+  const chartTimeline = rawTimeline
+    .filter((_: unknown, i: number) => i % step === 0 || i === rawTimeline.length - 1)
+    .map((p: { date: string; actualBtc: number; benchmarkBtc: number }) => ({
+      date: p.date,
+      "Your BTC": parseFloat(p.actualBtc.toFixed(6)),
+      "Buy & Hold": parseFloat(p.benchmarkBtc.toFixed(6)),
+    }));
+
+  const monthlyData = (snap.monthlyBars || []).map((m: { month: string; btcGained: number; benchmarkBtcGained: number }) => ({
+    month: m.month,
+    "Your BTC": parseFloat(m.btcGained.toFixed(6)),
+    "Buy & Hold": parseFloat(m.benchmarkBtcGained.toFixed(6)),
+  }));
+
+  // Build performance statement from snapshot data
+  const joinDate = snap.joinDate;
+  let performanceStatement = "";
+  if (joinDate) {
+    const joinDateObj = new Date(joinDate);
+    const joinMonthYear = joinDateObj.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    const alphaBtcAbs = Math.abs(snap.alphaBtc).toFixed(6);
+    const alphaUsdFormatted = fmtUsd(Math.abs(snap.alphaUsd));
+    if (snap.alphaBtc > 0.000001) {
+      performanceStatement = `Since joining in ${joinMonthYear}, your portfolio has accumulated ${alphaBtcAbs} BTC more than the buy-and-hold benchmark — equivalent to ${alphaUsdFormatted} at today's price.`;
+    } else if (snap.alphaBtc < -0.000001) {
+      performanceStatement = `Since joining in ${joinMonthYear}, your portfolio is ${alphaBtcAbs} BTC behind the buy-and-hold benchmark. The strategy is still accumulating — this gap typically closes as rotations complete.`;
+    } else {
+      performanceStatement = `Since joining in ${joinMonthYear}, your portfolio is tracking in line with the buy-and-hold benchmark. Alpha accumulates as rotations complete.`;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userName={user?.name} userRole={user?.role} onLogout={handleLogout} onRequestCall={handleRequestCall} isRequestingCall={requestCallMutation.isPending} />
+      <Header
+        userName={user?.name}
+        userRole={user?.role}
+        onLogout={handleLogout}
+        onRequestCall={() => requestCallMutation.mutate()}
+        isRequestingCall={requestCallMutation.isPending}
+      />
 
-      <main className="container py-8">
+      <main className="container py-8 space-y-6 max-w-6xl">
 
-        {/* ============================================================
-            HERO: BTC Holdings + BTC CAGR
-            ============================================================ */}
-        <div
-          className="rounded-lg mb-8 p-8 text-center relative overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, #0f0f0f 0%, #1a1200 50%, #0f0f0f 100%)",
-            border: "1px solid rgba(247,147,26,0.3)",
-          }}
-        >
-          {/* BTC watermark */}
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              fontSize: "14rem",
-              fontWeight: 900,
-              color: "rgba(247,147,26,0.04)",
-              lineHeight: 1,
-              userSelect: "none",
-              pointerEvents: "none",
-            }}
-          >
-            ₿
-          </div>
-
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <p
-              style={{
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color: "#F7931A",
-                marginBottom: "0.5rem",
-              }}
-            >
-              BTC Treasury Codex — {user?.name || "Client"}'s Portfolio
+        {/* Welcome + last synced */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
+              <Clock className="h-3 w-3" />
+              Data synced {fmtTimeAgo(snap.syncedAt)} · updates every 5 minutes
             </p>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto 1fr",
-                gap: "2rem",
-                alignItems: "center",
-                marginTop: "1.5rem",
-              }}
-            >
-              {/* BTC Holdings */}
-              <div>
-                <p style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", marginBottom: "0.75rem" }}>
-                  BTC Holdings
-                </p>
-                <p
-                  style={{
-                    fontSize: "clamp(2.5rem, 5vw, 4.5rem)",
-                    fontWeight: 700,
-                    color: "#F7931A",
-                    lineHeight: 1,
-                    letterSpacing: "-0.02em",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {formatNumber(currentBtc, 8)}
-                </p>
-                <p style={{ fontSize: "0.85rem", color: "#888", marginTop: "0.5rem" }}>BTC</p>
-                <p style={{ fontSize: "1rem", color: "#ccc", marginTop: "0.25rem" }}>{formatCurrency(btcUsdValue)} USD</p>
-              </div>
-
-              {/* Divider */}
-              <div style={{ width: "1px", height: "120px", background: "rgba(247,147,26,0.2)" }} />
-
-              {/* BTC CAGR */}
-              <div>
-                <p style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", marginBottom: "0.75rem" }}>
-                  BTC CAGR
-                </p>
-                <p
-                  style={{
-                    fontSize: "clamp(2.5rem, 5vw, 4.5rem)",
-                    fontWeight: 700,
-                    color: btcCagrPercent >= 0 ? "#22c55e" : "#ef4444",
-                    lineHeight: 1,
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  {formatPercent(btcCagrPercent)}
-                </p>
-                <p style={{ fontSize: "0.85rem", color: "#888", marginTop: "0.5rem" }}>In Bitcoin Terms</p>
-                <p style={{ fontSize: "1rem", color: "#ccc", marginTop: "0.25rem" }}>
-                  {btcFromTrades >= 0 ? "+" : ""}{formatNumber(btcFromTrades, 8)} BTC generated
-                </p>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "center", marginTop: "2rem" }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                style={{ borderColor: "rgba(247,147,26,0.3)", color: "#ccc" }}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowShareCard(!showShareCard)}
-                style={{ borderColor: "rgba(247,147,26,0.3)", color: "#F7931A" }}
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Share My Performance
-              </Button>
-            </div>
           </div>
+          <Button onClick={handleShare} variant="outline" className="border-primary text-primary hover:bg-primary hover:text-black font-semibold">
+            <Share2 className="h-4 w-4 mr-2" />Share My Results
+          </Button>
         </div>
 
-        {/* ============================================================
-            SHAREABLE PERFORMANCE CARD (toggle)
-            ============================================================ */}
-        {showShareCard && (
-          <Card className="bg-card border-border mb-8" style={{ borderColor: "rgba(247,147,26,0.3)" }}>
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Share2 className="h-5 w-5 text-primary" />
-                Your Performance Card
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Screenshot this to share your Bitcoin CAGR with friends and family.</p>
-            </CardHeader>
-            <CardContent>
-              <div
-                style={{
-                  background: "linear-gradient(135deg, #0a0a0a 0%, #1a1200 100%)",
-                  border: "2px solid rgba(247,147,26,0.4)",
-                  padding: "2.5rem",
-                  textAlign: "center",
-                  maxWidth: "480px",
-                  margin: "0 auto",
-                }}
-              >
-                <p style={{ fontSize: "0.65rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#F7931A", marginBottom: "1rem" }}>Bitcoin Treasury Codex</p>
-                <p style={{ fontSize: "0.85rem", color: "#888", marginBottom: "0.5rem" }}>My BTC Holdings</p>
-                <p style={{ fontSize: "2.5rem", fontWeight: 700, color: "#F7931A", lineHeight: 1 }}>{formatNumber(currentBtc, 8)} BTC</p>
-                <p style={{ fontSize: "0.8rem", color: "#888", margin: "1.5rem 0 0.5rem" }}>BTC CAGR (Bitcoin Terms)</p>
-                <p style={{ fontSize: "3rem", fontWeight: 700, color: btcCagrPercent >= 0 ? "#22c55e" : "#ef4444", lineHeight: 1 }}>{formatPercent(btcCagrPercent)}</p>
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "1.5rem", paddingTop: "1rem" }}>
-                  <p style={{ fontSize: "0.65rem", color: "#555", letterSpacing: "0.1em" }}>codexyield.com &nbsp;|&nbsp; Powered by Halfacre Research</p>
+        {/* ── BTC Alpha Hero ── */}
+        <Card className="bg-card border-0 overflow-hidden" style={{ borderTop: "4px solid #f7931a" }}>
+          <CardContent className="pt-8 pb-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+              {/* Left: headline metric */}
+              <div className="text-center md:text-left">
+                <p className="text-muted-foreground text-xs font-semibold uppercase tracking-widest mb-3">
+                  BTC Alpha vs Buy &amp; Hold
+                </p>
+                <div className="flex items-baseline gap-3 justify-center md:justify-start">
+                  <span className={`text-7xl font-black leading-none ${isAhead ? "text-green-500" : "text-red-500"}`}>
+                    {isAhead ? "+" : ""}{snap.alphaPercent.toFixed(2)}%
+                  </span>
+                  {isAhead
+                    ? <TrendingUp className="h-8 w-8 text-green-500 shrink-0" />
+                    : <TrendingDown className="h-8 w-8 text-red-500 shrink-0" />
+                  }
                 </div>
+                <p className="text-muted-foreground text-sm mt-2">
+                  {isAhead ? "ahead of" : "behind"} the passive DCA benchmark
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* ============================================================
-            SECONDARY: USD METRICS
-            ============================================================ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-          <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">USD Deposited</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(portfolio.totalDeposited)}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Portfolio Value (USD)</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(portfolio.totalValue)}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">USD Growth</p>
-              <p className={`text-2xl font-bold ${portfolio.dollarGrowth >= 0 ? "text-green-500" : "text-muted-foreground"}`}>
-                {portfolio.dollarGrowth >= 0 ? "+" : ""}{formatCurrency(portfolio.dollarGrowth)}
-              </p>
-              <p className={`text-sm mt-1 ${portfolio.percentGrowth >= 0 ? "text-green-500" : "text-muted-foreground"}`}>
-                {formatPercent(portfolio.percentGrowth)}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ============================================================
-            BTC HOLDINGS BREAKDOWN
-            ============================================================ */}
-        {portfolio.btcMetrics && (
-          <Card className="bg-card border-border mb-6">
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Bitcoin className="h-5 w-5 text-primary" />
-                BTC Holdings Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Right: stat grid */}
+              <div className="grid grid-cols-2 gap-x-10 gap-y-5 text-center shrink-0">
                 <div>
-                  <p className="text-sm text-muted-foreground">BTC Deposited</p>
-                  <p className="text-xl font-bold text-foreground">{formatNumber(portfolio.btcMetrics.totalPurchased, 8)} BTC</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Your BTC</p>
+                  <p className="text-2xl font-bold text-foreground">{fmtBtc(snap.actualBtc)}</p>
+                  <p className="text-xs text-muted-foreground">{fmtUsd(snap.actualBtc * snap.btcPrice)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">BTC Currently Held</p>
-                  <p className="text-xl font-bold text-primary">{formatNumber(portfolio.btcMetrics.currentlyHeld, 8)} BTC</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Buy &amp; Hold Would Be</p>
+                  <p className="text-2xl font-bold text-muted-foreground">{fmtBtc(snap.benchmarkBtc)}</p>
+                  <p className="text-xs text-muted-foreground">{fmtUsd(snap.benchmarkBtc * snap.btcPrice)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">BTC Generated by Codex</p>
-                  <p className={`text-xl font-bold ${btcFromTrades >= 0 ? "text-green-500" : "text-red-500"}`}>
-                    {btcFromTrades >= 0 ? "+" : ""}{formatNumber(btcFromTrades, 8)} BTC
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">BTC Alpha</p>
+                  <p className={`text-2xl font-bold ${isAhead ? "text-green-500" : "text-red-500"}`}>
+                    {isAhead ? "+" : ""}{fmtBtc(snap.alphaBtc)}
                   </p>
+                  <p className="text-xs text-muted-foreground">{fmtUsd(snap.alphaUsd)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">BTC Price (Live)</p>
-                  <p className="text-xl font-bold text-foreground">{formatCurrency(portfolio.btcMetrics.price)}</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">BTC Price</p>
+                  <p className="text-2xl font-bold text-foreground">{fmtUsd(snap.btcPrice)}</p>
+                  <p className="text-xs text-muted-foreground">synced {fmtTimeAgo(snap.syncedAt)}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
 
-        {/* ============================================================
-            ASSET BALANCES
-            ============================================================ */}
-        {portfolio.balances && portfolio.balances.length > 0 && (
-          <Card className="bg-card border-border mb-6">
+            {/* Performance statement */}
+            {performanceStatement && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <p className="text-sm text-muted-foreground leading-relaxed italic">
+                  "{performanceStatement}"
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Portfolio Summary ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Portfolio Value", value: fmtUsd(snap.totalValueUsd), Icon: DollarSign, color: "text-primary" },
+            { label: "Total Deposited", value: fmtUsd(snap.totalDepositedUsd), Icon: DollarSign, color: "text-muted-foreground" },
+            {
+              label: "USD Growth",
+              value: fmtUsd(snap.dollarGrowth),
+              Icon: snap.dollarGrowth >= 0 ? TrendingUp : TrendingDown,
+              color: snap.dollarGrowth >= 0 ? "text-green-500" : "text-red-500",
+            },
+            {
+              label: "USD Return",
+              value: fmtPct(snap.percentGrowth),
+              Icon: BarChart3,
+              color: snap.percentGrowth >= 0 ? "text-green-500" : "text-red-500",
+            },
+          ].map(({ label, value, Icon, color }) => (
+            <Card key={label} className="bg-card border-border">
+              <CardContent className="pt-5 pb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon className={`h-4 w-4 ${color}`} />
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+                </div>
+                <p className={`text-xl font-bold ${color}`}>{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* ── Holdings ── */}
+        {(snap.balances as any[]).length > 0 && (
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-primary" />
-                Account Balances
-              </CardTitle>
+              <CardTitle className="text-base font-semibold">Current Holdings</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {portfolio.balances.map((balance) => (
-                  <div key={balance.currency} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                {(snap.balances as any[]).map((b: any) => (
+                  <div key={b.currency} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                        <span className="text-xs font-bold text-foreground uppercase">{balance.currency.slice(0, 3)}</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground uppercase">{balance.currency}</p>
-                        <p className="text-sm text-muted-foreground">{formatNumber(balance.total, 8)}</p>
-                      </div>
+                      <span className="font-mono font-bold text-foreground w-14">{b.currency.toUpperCase()}</span>
+                      <span className="text-muted-foreground text-sm">{fmtBtc(b.total)}</span>
                     </div>
-                    <p className="font-semibold text-foreground">{formatCurrency(balance.usdValue)}</p>
+                    <div className="text-right">
+                      <p className="font-semibold text-foreground">{fmtUsd(b.usdValue)}</p>
+                      <p className="text-xs text-muted-foreground">{fmtUsd(b.price)} / unit</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -392,68 +372,81 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* ============================================================
-            BTC ROTATION TRADES
-            ============================================================ */}
-        {portfolio.btcMetrics && (portfolio.btcMetrics as any).btcPairTrades && (portfolio.btcMetrics as any).btcPairTrades.length > 0 && (
-          <Card className="bg-card border-border mb-6">
+        {/* ── Benchmark Comparison Chart ── */}
+        {chartTimeline.length > 1 && (
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                BTC Rotation Trades
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                BTC Accumulation vs Buy &amp; Hold
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Trades executed to grow BTC holdings in Bitcoin-denominated terms</p>
+              <p className="text-xs text-muted-foreground">Your actual BTC balance vs. what a passive DCA buyer would have</p>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Pair</TableHead>
-                    <TableHead className="text-right">BTC Spent</TableHead>
-                    <TableHead className="text-right">BTC Received</TableHead>
-                    <TableHead className="text-right">Net BTC</TableHead>
-                    <TableHead className="text-right">% Gain</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(portfolio.btcMetrics as any).btcPairTrades.map((trade: any, index: number) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{formatDate(trade.date)}</TableCell>
-                      <TableCell className="font-mono text-sm font-semibold">{trade.pair}</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-muted-foreground">{formatNumber(trade.btcSpent, 8)} BTC</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-muted-foreground">{formatNumber(trade.btcReceived, 8)} BTC</TableCell>
-                      <TableCell className={`text-right font-mono text-sm font-bold ${trade.netBtc >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {trade.netBtc >= 0 ? "+" : ""}{formatNumber(trade.netBtc, 8)} BTC
-                      </TableCell>
-                      <TableCell className={`text-right font-mono text-sm font-semibold ${trade.percentGain >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {trade.percentGain >= 0 ? "+" : ""}{formatNumber(trade.percentGain, 2)}%
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartTimeline} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#888" }} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 10, fill: "#888" }} tickLine={false} tickFormatter={(v) => v.toFixed(4)} />
+                  <Tooltip
+                    contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 6 }}
+                    labelStyle={{ color: "#888", fontSize: 11 }}
+                    formatter={(value: number, name: string) => [`${fmtBtc(value)} BTC`, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line type="monotone" dataKey="Your BTC" stroke="#f7931a" strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="Buy & Hold" stroke="#555" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                </LineChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         )}
 
-        {/* ============================================================
-            REQUEST A CALL CTA
-            ============================================================ */}
-        <Card className="bg-card border-border" style={{ borderColor: "rgba(247,147,26,0.2)" }}>
+        {/* ── Monthly BTC Accumulation ── */}
+        {monthlyData.length > 0 && (
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                Monthly BTC Accumulation
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">BTC added each month — yours vs. what buy &amp; hold would have added</p>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#888" }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#888" }} tickLine={false} tickFormatter={(v) => v.toFixed(4)} />
+                  <Tooltip
+                    contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 6 }}
+                    labelStyle={{ color: "#888", fontSize: 11 }}
+                    formatter={(value: number, name: string) => [`${fmtBtc(value)} BTC`, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Your BTC" fill="#f7931a" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Buy & Hold" fill="#444" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Share CTA ── */}
+        <Card className="bg-card" style={{ border: "1px solid rgba(247,147,26,0.2)" }}>
           <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
             <div>
-              <p className="font-semibold text-foreground">Have questions about your portfolio?</p>
-              <p className="text-sm text-muted-foreground">Schedule a call with Matthew Halfacre directly.</p>
+              <p className="font-semibold text-foreground">Know someone who should be accumulating more BTC?</p>
+              <p className="text-sm text-muted-foreground">Download your performance card and share it with friends and family.</p>
             </div>
-            <Button
-              onClick={handleRequestCall}
-              disabled={requestCallMutation.isPending}
-              className="bg-primary hover:bg-primary/90 text-black font-bold whitespace-nowrap"
-            >
-              <Phone className="h-4 w-4 mr-2" />
-              Request a Call
-            </Button>
+            <div className="flex gap-3 shrink-0">
+              <Button onClick={handleShare} className="bg-primary hover:bg-primary/90 text-black font-bold whitespace-nowrap">
+                <Share2 className="h-4 w-4 mr-2" />Download Performance Card
+              </Button>
+              <Button onClick={() => requestCallMutation.mutate()} disabled={requestCallMutation.isPending} variant="outline" className="border-primary text-primary hover:bg-primary hover:text-black font-bold whitespace-nowrap">
+                <Phone className="h-4 w-4 mr-2" />Request a Call
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -462,16 +455,18 @@ export default function Dashboard() {
   );
 }
 
-function Header({ 
-  userName, 
+// ─── Header ───────────────────────────────────────────────────────────────────
+
+function Header({
+  userName,
   userRole,
-  onLogout, 
-  onRequestCall, 
-  isRequestingCall 
-}: { 
+  onLogout,
+  onRequestCall,
+  isRequestingCall,
+}: {
   userName?: string | null;
   userRole?: string | null;
-  onLogout: () => void; 
+  onLogout: () => void;
   onRequestCall: () => void;
   isRequestingCall: boolean;
 }) {
@@ -484,22 +479,10 @@ function Header({
         </div>
         <div className="flex items-center gap-4">
           {userRole === "admin" && (
-            <a href="/admin" className="text-sm text-primary hover:underline font-medium">
-              Admin Panel
-            </a>
+            <a href="/admin" className="text-sm text-primary hover:underline font-medium">Admin Panel</a>
           )}
-          <Button
-            variant="outline"
-            onClick={onRequestCall}
-            disabled={isRequestingCall}
-            className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Request a Call
-          </Button>
           <Button variant="ghost" onClick={onLogout} className="text-muted-foreground hover:text-foreground">
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
+            <LogOut className="h-4 w-4 mr-2" />Logout
           </Button>
         </div>
       </div>
@@ -507,53 +490,28 @@ function Header({
   );
 }
 
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
 function DashboardSkeleton() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/50 h-16">
         <div className="container flex items-center justify-between h-full">
-          <Skeleton className="h-10 w-32" />
           <Skeleton className="h-10 w-40" />
-        </div>
-      </header>
-      <main className="container py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-32" />
-          </div>
           <Skeleton className="h-10 w-24" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <Skeleton className="h-6 w-40" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-12 w-48 mb-6" />
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <Skeleton className="h-6 w-40" />
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i}>
-                    <Skeleton className="h-4 w-24 mb-2" />
-                    <Skeleton className="h-8 w-32" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+      </header>
+      <main className="container py-8 space-y-6 max-w-6xl">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-36" />
         </div>
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+        <Skeleton className="h-80 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </main>
     </div>
   );

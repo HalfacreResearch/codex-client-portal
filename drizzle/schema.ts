@@ -95,3 +95,54 @@ export const adminMessages = mysqlTable("admin_messages", {
 
 export type AdminMessage = typeof adminMessages.$inferSelect;
 export type InsertAdminMessage = typeof adminMessages.$inferInsert;
+
+/**
+ * Portfolio snapshots — pre-computed portfolio data per client.
+ * Written by the background sync job every 5-10 minutes.
+ * All dashboard and admin views read from here instead of calling sFOX directly.
+ * One row per client, upserted on each sync cycle.
+ */
+export const portfolioSnapshots = mysqlTable("portfolio_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  // BTC alpha metrics (stored as strings to preserve decimal precision)
+  actualBtc: text("actualBtc").notNull().default("0"),
+  benchmarkBtc: text("benchmarkBtc").notNull().default("0"),
+  alphaBtc: text("alphaBtc").notNull().default("0"),
+  alphaPercent: text("alphaPercent").notNull().default("0"),
+  alphaUsd: text("alphaUsd").notNull().default("0"),
+  // Portfolio totals
+  totalValueUsd: text("totalValueUsd").notNull().default("0"),
+  totalDepositedUsd: text("totalDepositedUsd").notNull().default("0"),
+  dollarGrowth: text("dollarGrowth").notNull().default("0"),
+  percentGrowth: text("percentGrowth").notNull().default("0"),
+  btcPrice: text("btcPrice").notNull().default("0"),
+  // Serialized JSON for charts and UI
+  balancesJson: text("balancesJson").notNull().default("[]"),       // [{currency, total, usdValue, price}]
+  monthlyBarsJson: text("monthlyBarsJson").notNull().default("[]"), // [{month, btcGained}]
+  chartDataJson: text("chartDataJson").notNull().default("[]"),     // [{date, actualBtc, benchmarkBtc}]
+  // Join date (date of first BTC purchase)
+  joinDate: timestamp("joinDate"),
+  // Sync metadata
+  syncedAt: timestamp("syncedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PortfolioSnapshot = typeof portfolioSnapshots.$inferSelect;
+export type InsertPortfolioSnapshot = typeof portfolioSnapshots.$inferInsert;
+
+/**
+ * Sync log — records each sync attempt per client.
+ * Used for debugging, monitoring, and showing "last updated" timestamps.
+ */
+export const syncLog = mysqlTable("sync_log", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  status: mysqlEnum("status", ["success", "error", "rate_limited"]).notNull(),
+  errorMessage: text("errorMessage"),
+  durationMs: int("durationMs"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SyncLog = typeof syncLog.$inferSelect;
+export type InsertSyncLog = typeof syncLog.$inferInsert;

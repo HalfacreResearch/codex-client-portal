@@ -105,3 +105,11 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# Manus internal files
+.manus/
+
+# Vercel (not used — deployed on Hostinger)
+vercel.json
+.vercel-trigger
+.vercel/
