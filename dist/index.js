@@ -84394,7 +84394,11 @@ var import_express = __toESM(require_express2(), 1);
 import fs from "fs";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
+
+// vite-config-stub:../../vite.config
+var vite_default = {};
+
+// server/_core/vite.ts
 async function setupVite(app, server) {
   const serverOptions = {
     middlewareMode: true,
@@ -84402,7 +84406,7 @@ async function setupVite(app, server) {
     allowedHosts: true
   };
   const vite = await createViteServer({
-    ...viteConfig,
+    ...vite_default,
     configFile: false,
     server: serverOptions,
     appType: "custom"
